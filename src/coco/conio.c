@@ -3,7 +3,7 @@
 
 static char lastKey = 0;
 
-unsigned char kbhit(void)
+uint8_t kbhit(void)
 {
     return (char)(lastKey || (lastKey = inkey()) || (lastKey = inkey()));
 }

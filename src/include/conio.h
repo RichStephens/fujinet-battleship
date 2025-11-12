@@ -5,7 +5,7 @@
  * This defines a subset of conio that is needed for this project
  */
 
-unsigned char kbhit (void);
+uint8_t kbhit (void);
 char cgetc (void);
 
 #endif 

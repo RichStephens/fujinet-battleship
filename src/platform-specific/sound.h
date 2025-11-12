@@ -16,19 +16,19 @@ void enableKeySounds();
 bool toggleSound();
 void setSound();
 */
-
+void soundCursor();
+void soundSelect();
 void soundStop();
 void soundJoinGame();
 void soundMyTurn();
 void soundGameDone();
 void soundTick();
-void soundCursor();
 void soundPlaceShip();
 void soundAttack();
 void soundInvalid();
 void soundHit();
 void soundMiss();
 
-void pause(unsigned char frames);
+void pause(uint8_t frames);
 
 #endif /* SOUND_H */

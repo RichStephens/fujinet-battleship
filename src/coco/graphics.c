@@ -10,7 +10,7 @@
 #include "../misc.h"
 #include <coco.h>
 
-extern unsigned char charset[];
+extern uint8_t charset[];
 #define OFFSET_Y 2
 
 #define ROP_CPY 0xff
@@ -24,6 +24,11 @@ extern unsigned char charset[];
 #define COLOR_MODE_COCO3_COMPOSITE 2
 
 #define LEGEND_X 24
+
+// Defined in this file
+void drawTextAltAt(uint8_t x, uint8_t y, const char *s);
+void drawTextAt(uint8_t x, uint8_t y, const char *s);
+void drawShipInternal(uint8_t *dest, uint8_t size, uint8_t delta);
 
 extern char lastKey;
 extern uint8_t background;
@@ -121,8 +126,8 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
     uint8_t x, y;
     uint16_t pos = fieldX + quadrant_offset[player];
 
-    x = pos % 32 + 1;
-    y = pos / 32 - 9;
+    x = (uint8_t)(pos % 32 + 1);
+    y = (uint8_t)(pos / 32 - 9);
 
     if (player == 0 || player == 3)
     {
@@ -142,18 +147,18 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
     }
     background = 0;
 }
-void drawText(unsigned char x, unsigned char y, const char *s)
+void drawText(uint8_t x, uint8_t y, const char *s)
 {
     y = y * 8 + OFFSET_Y;
     if (y > 184)
         y = 184;
     drawTextAt(x, y, s);
 }
-void drawTextAt(unsigned char x, unsigned char y, const char *s)
+void drawTextAt(uint8_t x, uint8_t y, const char *s)
 {
     char c;
 
-    while (c = *s++)
+    while ((c = *s++))
     {
         if (c >= 97 && c <= 122)
             c -= 32;
@@ -161,7 +166,7 @@ void drawTextAt(unsigned char x, unsigned char y, const char *s)
     }
 }
 
-void drawTextAlt(unsigned char x, unsigned char y, const char *s)
+void drawTextAlt(uint8_t x, uint8_t y, const char *s)
 {
     y = y * 8 + OFFSET_Y;
     if (y > 184)
@@ -169,12 +174,12 @@ void drawTextAlt(unsigned char x, unsigned char y, const char *s)
     drawTextAltAt(x, y, s);
 }
 
-void drawTextAltAt(unsigned char x, unsigned char y, const char *s)
+void drawTextAltAt(uint8_t x, uint8_t y, const char *s)
 {
     char c;
     uint8_t rop;
 
-    while (c = *s++)
+    while ((c = *s++))
     {
         if (c < 65 || c > 90)
         {
@@ -211,17 +216,17 @@ void drawLegendShip(uint8_t player, uint8_t index, uint8_t size, uint8_t status)
 
     if (status)
     {
-        drawShipInternal(SCREEN + dest, size, 1);
+        drawShipInternal((uint8_t *)SCREEN + dest, size, 1);
     }
     else
     {
-        hires_Draw(dest % 32, dest / 32, 1, size * 8, ROP_CPY, &charset[(uint16_t)0x1c << 3]);
+        hires_Draw((uint8_t)(dest % 32), (uint8_t)(dest / 32), 1, size * 8, ROP_CPY, &charset[(uint16_t)0x1c << 3]);
     }
 }
 
 void drawGamefieldCursor(uint8_t quadrant, uint8_t x, uint8_t y, uint8_t *gamefield, uint8_t blink)
 {
-    uint8_t *src, *dest = SCREEN + quadrant_offset[quadrant] + fieldX + (uint16_t)y * 256 + x;
+    uint8_t *src, *dest = (uint8_t *)SCREEN + quadrant_offset[quadrant] + fieldX + (uint16_t)y * 256 + x;
     uint8_t j, c = gamefield[y * 10 + x];
 
     if (blink)
@@ -250,7 +255,7 @@ uint8_t *srcHitLegend = &charset[(uint16_t)0x1C << 3];
 // Updates the gamefield display at attackPos
 void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t blink)
 {
-    uint8_t *src, *dest = SCREEN + quadrant_offset[quadrant] + fieldX + (uint16_t)(attackPos / 10) * 256 + (attackPos % 10);
+    uint8_t *src, *dest = (uint8_t *)SCREEN + quadrant_offset[quadrant] + fieldX + (uint16_t)(attackPos / 10) * 256 + (attackPos % 10);
     uint8_t j, c = gamefield[attackPos];
 
     if (c == FIELD_ATTACK)
@@ -275,7 +280,7 @@ void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos
 
 void drawGamefield(uint8_t quadrant, uint8_t *field)
 {
-    uint8_t *dest = SCREEN + quadrant_offset[quadrant] + fieldX;
+    uint8_t *dest = (uint8_t *)SCREEN + quadrant_offset[quadrant] + fieldX;
     uint8_t y, x, j;
     uint8_t *src;
 
@@ -355,11 +360,11 @@ void drawShip(uint8_t size, uint8_t pos, bool hide)
         return;
     }
 
-    uint8_t *dest = SCREEN + (uint16_t)y * 32 + x;
+    uint8_t *dest = (uint8_t *)SCREEN + (uint16_t)y * 32 + x;
     drawShipInternal(dest, size, delta);
 }
 
-void drawIcon(unsigned char x, unsigned char y, unsigned char icon)
+void drawIcon(uint8_t x, uint8_t y, uint8_t icon)
 {
     hires_putc(x, y * 8 + OFFSET_Y, ROP_CPY, icon);
 }
@@ -374,7 +379,7 @@ void drawConnectionIcon(bool show)
     hires_putcc(0, HEIGHT * 8 - 8, ROP_CPY, show ? 0x1e1f : 0x2020);
 }
 
-void drawSpace(unsigned char x, unsigned char y, unsigned char w)
+void drawSpace(uint8_t x, uint8_t y, uint8_t w)
 {
     y = y * 8 + OFFSET_Y;
     if (y > 184)
@@ -393,8 +398,8 @@ void drawBoard(uint8_t playerCount)
     for (i = 0; i < playerCount; i++)
     {
         pos = fieldX + quadrant_offset[i];
-        x = pos % 32;
-        y = pos / 32;
+        x = (uint8_t)(pos % 32);
+        y = (uint8_t)(pos / 32);
 
         // right and left drawers
         if (i > 1 || playerCount == 2 && i > 0)
@@ -498,13 +503,13 @@ void drawBoard(uint8_t playerCount)
     }
 }
 
-void drawLine(unsigned char x, unsigned char y, unsigned char w)
+void drawLine(uint8_t x, uint8_t y, uint8_t w)
 {
     y = y * 8 + OFFSET_Y + 1;
     hires_Mask(x, y, w, 2, ROP_BLUE);
 }
 
-void drawBox(unsigned char x, unsigned char y, unsigned char w, unsigned char h)
+void drawBox(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
 {
     y = y * 8 + 1 + OFFSET_Y;
 
@@ -540,7 +545,7 @@ void waitvsync()
         ;
 }
 
-void drawBlank(unsigned char x, unsigned char y)
+void drawBlank(uint8_t x, uint8_t y)
 {
     hires_putc(x, y * 8 + OFFSET_Y, ROP_CPY, 0x20);
 }

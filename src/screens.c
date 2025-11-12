@@ -121,7 +121,7 @@ void showPlayerNameScreen()
     drawBox(WIDTH / 2 - PLAYER_NAME_MAX / 2 - 1, 16, PLAYER_NAME_MAX + 1, 1);
     drawText(WIDTH / 2 - PLAYER_NAME_MAX / 2, 17, playerName);
 
-    i = (unsigned char)strlen(playerName);
+    i = (uint8_t)strlen(playerName);
 
     clearCommonInput();
     while (!inputFieldCycle(WIDTH / 2 - PLAYER_NAME_MAX / 2, 17, PLAYER_NAME_MAX, playerName))
@@ -376,7 +376,7 @@ void showTableSelectionScreen()
     strcat(query, playerName);
 
     // Replace space with + for pshowWelcomScreenlayer name
-    i = (unsigned char)strlen(query);
+    i = (uint8_t)strlen(query);
     while (--i)
         if (query[i] == ' ')
             query[i] = '+';
@@ -457,7 +457,7 @@ void showInGameMenuScreen()
                 centerText(10, "please wait");
 
                 //  Clear server app key in case of reboot
-                write_appkey(AK_LOBBY_CREATOR_ID, AK_LOBBY_APP_ID, AK_LOBBY_KEY_SERVER, 0, "");
+                write_appkey(AK_LOBBY_CREATOR_ID, AK_LOBBY_APP_ID, AK_LOBBY_KEY_SERVER, 0, (char *)"");
 
                 // Inform server player is leaving
                 apiCall("leave");

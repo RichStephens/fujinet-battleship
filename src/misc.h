@@ -129,7 +129,7 @@ typedef struct
 
 typedef struct
 {
-    unsigned char key;
+    uint8_t key;
     bool trigger;
     int8_t dirX;
     int8_t dirY;
@@ -156,9 +156,8 @@ extern InputStruct input;
 extern PrefsStruct prefs;
 
 // Common local scope temp variables
-// extern unsigned char h, i, j, k, x, y;
 
-void pause(unsigned char frames);
+void pause(uint8_t frames);
 void clearCommonInput();
 void readCommonInput();
 void loadPrefs();

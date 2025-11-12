@@ -37,7 +37,6 @@ GameState state;
 PrefsStruct prefs;
 
 // Common local scope temp variables
-// unsigned char h, i, j, k, x, y;
 char tempBuffer[128];
 uint8_t shipSize[5] = {5, 4, 3, 3, 2}; // Standard ship sizes
 

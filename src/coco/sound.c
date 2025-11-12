@@ -77,19 +77,6 @@ void soundGameDone()
     tone(110, 5, 20);
 }
 
-void soundRollDice()
-{
-    tone(100 + (rand() % 20) * 7, 0, 3);
-    // tone(100+(rand() % 20)*7,0,3);
-    tone(100 + (rand() % 20) * 7, 0, 0);
-}
-
-void soundRollButton()
-{
-    tone(2, 1, 10);
-    tone(40, 1, 10);
-}
-
 void soundCursor()
 {
     static int i;
@@ -149,7 +136,7 @@ void soundMiss()
 
 void soundInvalid()
 {
-    uint16_t i;
+    uint8_t i;
     uint8_t c;
 
     for (i = 5; i > 0; i--)
@@ -160,7 +147,7 @@ void soundInvalid()
 
         for (c = 10; c > 0; c--)
         {
-            *(uint8_t *)0xFF20 = rand() % 50;
+            *(uint8_t *)0xFF20 = (uint8_t)(rand() % 50);
         }
     }
 }

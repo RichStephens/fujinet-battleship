@@ -62,7 +62,7 @@ void mount()
     char file[] = "LOBBY";
 
     // Read current list of hosts from FujiNet
-    fuji_get_host_slots((unsigned char *)host_slots, FUJI_HOST_SLOT_COUNT);
+    fuji_get_host_slots((uint8_t *)host_slots, FUJI_HOST_SLOT_COUNT);
 
     // Pick the host slot to use. Default to the last, but choose an existing slot
     // if it already has the same host
@@ -81,7 +81,7 @@ void mount()
     {
         slot = FUJI_HOST_SLOT_COUNT - 1;
         strcpy((char *)host_slots[slot], host);
-        fuji_put_host_slots((unsigned char *)host_slots, FUJI_HOST_SLOT_COUNT);
+        fuji_put_host_slots((uint8_t *)host_slots, FUJI_HOST_SLOT_COUNT);
     }
 
     // Mount the file to the device/host slot

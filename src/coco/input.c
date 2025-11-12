@@ -1,6 +1,6 @@
 #include <coco.h>
 
-unsigned char readJoystick()
+uint8_t readJoystick()
 {
     // byte*  joy = *readJoystickPositions();
     // return joy[0];

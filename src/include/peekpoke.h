@@ -44,9 +44,9 @@
 
 
 
-#define POKE(addr,val)     (*(unsigned char*) (addr) = (val))
+#define POKE(addr,val)     (*(uint8_t*) (addr) = (val))
 #define POKEW(addr,val)    (*(unsigned*) (addr) = (val))
-#define PEEK(addr)         (*(unsigned char*) (addr))
+#define PEEK(addr)         (*(uint8_t*) (addr))
 #define PEEKW(addr)        (*(unsigned*) (addr))
 
 

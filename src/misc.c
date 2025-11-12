@@ -10,14 +10,14 @@
 #include <stdint.h>
 
 InputStruct input;
-unsigned char _lastJoy, _joy, _joySameCount = 10;
+uint8_t _lastJoy, _joy, _joySameCount = 10;
 bool _buttonReleased = true;
 
 #ifndef JOY_BTN_2_MASK
 #define JOY_BTN_2_MASK JOY_BTN_1_MASK
 #endif
 
-void pause(unsigned char frames)
+void pause(uint8_t frames)
 {
     while (frames--)
         waitvsync();
@@ -138,7 +138,7 @@ extern uint8_t ak_appkey_size;
 
 void fuji_set_appkey_details(uint16_t creator_id, uint8_t app_id, enum AppKeySize keysize)
 {
-    ak_appkey_size = keysize;
+    ak_appkey_size = (uint8_t)keysize;
     ak_app_id = app_id;
     ak_creator_id = creator_id;
 }

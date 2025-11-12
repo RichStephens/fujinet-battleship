@@ -16,6 +16,8 @@
 // Call to clear the screen, passing true to preserve borders
 void resetScreen();
 
+uint8_t cycleNextColor();
+
 void drawText(uint8_t x, uint8_t y, const char *s);
 void drawTextAlt(uint8_t x, uint8_t y, const char *s);
 
@@ -23,6 +25,7 @@ void drawIcon(uint8_t x, uint8_t y, uint8_t icon);
 
 void drawShip(uint8_t size, uint8_t pos, bool hide);
 void drawLegendShip(uint8_t player, uint8_t index, uint8_t size, uint8_t status);
+void drawPlayerName(uint8_t player, const char *name, bool active);
 
 void drawGamefield(uint8_t quadrant, uint8_t *field);
 void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t blink);

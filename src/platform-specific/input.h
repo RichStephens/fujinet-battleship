@@ -8,6 +8,6 @@
 #include "vars.h"
 
 // Platform specific implementations
-unsigned char readJoystick();
+uint8_t readJoystick();
 
 #endif /* INPUT_H */

@@ -18,7 +18,7 @@ uint8_t shipPlacements[5] = {0, 0, 0, 0, 0};
 uint8_t shipPlaceIndex = 0;
 char moveBuffer[32];
 
-void progressAnim(unsigned char y)
+void progressAnim(uint8_t y)
 {
     static uint8_t i;
 
@@ -401,7 +401,7 @@ void renderGameboard()
         for (i = 0; i < clientState.game.playerCount; i++)
         {
             // Draw player name
-            drawPlayerName(i, i == 0 && clientState.game.playerStatus != PLAYER_STATUS_VIEWING ? "you" : clientState.game.players[i].name, i == clientState.game.activePlayer);
+            drawPlayerName(i, i == 0 && clientState.game.playerStatus != PLAYER_STATUS_VIEWING ? "you" : (const char *)clientState.game.players[i].name, i == clientState.game.activePlayer);
         }
 
         // Blink active player
@@ -589,7 +589,7 @@ void waitOnPlayerMove()
         if (++waitCount > 5)
         {
             waitCount = 0;
-            i = (maxJifs - getTime()) / jifsPerSecond;
+            i = (uint8_t)((maxJifs - getTime()) / jifsPerSecond);
             if (i <= 20 && i != clientState.game.moveTime)
             {
                 clientState.game.moveTime = i;
@@ -629,13 +629,13 @@ void clearRenderState()
 }
 
 /// @brief Convenience function to draw text centered at row Y
-void centerText(unsigned char y, const char *text)
+void centerText(uint8_t y, const char *text)
 {
     drawText(WIDTH / 2 - (uint8_t)strlen(text) / 2, y, text);
 }
 
 /// @brief Convenience function to draw text centered at row Y, blanking out the rest of the row
-void centerTextWide(unsigned char y, const char *text)
+void centerTextWide(uint8_t y, const char *text)
 {
     uint8_t i, x;
     i = (uint8_t)strlen(text);
@@ -647,7 +647,7 @@ void centerTextWide(unsigned char y, const char *text)
 }
 
 /// @brief Convenience function to draw text centered at row Y in alternate color
-void centerTextAlt(unsigned char y, const char *text)
+void centerTextAlt(uint8_t y, const char *text)
 {
     drawTextAlt(WIDTH / 2 - (uint8_t)strlen(text) / 2, y, text);
 }
