@@ -162,8 +162,11 @@ void drawText(unsigned char x, unsigned char y, const char *s)
 
     while (c = *s++)
     {
-        if (c > 90 || (c < 65 && c >= 32))
+
+        if (c > 90 || (c < 65 && c > 32))
             c -= 32;
+        else if (c == 0x20)
+            c = 0x40;
         *pos++ = c;
     }
 }
@@ -360,13 +363,15 @@ void drawBoard(uint8_t currentPlayerCount)
         // Invert 0-9 & A-Z characters for in-game charset
         inGameCharSet = true;
 
-        dest = CHARSET_LOC + 0x10 * 8;
+        dest = CHARSET_LOC + 0x01 * 8;
         while (dest < CHARSET_LOC + 0x5b * 8)
         {
             *dest = *dest ^ 0xff | 0b01010101;
             dest++;
             if (dest == CHARSET_LOC + 0x1A * 8)
                 dest = CHARSET_LOC + 0x40 * 8;
+            if (dest == CHARSET_LOC + 0x02 * 8)
+                dest = CHARSET_LOC + 0x10 * 8;
         }
     }
 
@@ -519,6 +524,13 @@ void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos
         memset(PM_BASE + 1024, 0, 768);
     }
 
+    // Animate attack (only in empty sea cell)
+    if (blink > 9 && (*dest == TILE_SEA || *dest > 226))
+    {
+        *dest = 217 + blink;
+        return;
+    }
+
     if (c == FIELD_ATTACK)
     {
         *dest = blink ? TILE_HIT2 : TILE_HIT;
@@ -552,7 +564,14 @@ void drawGamefieldCursor(uint8_t quadrant, uint8_t x, uint8_t y, uint8_t *gamefi
 
 void drawEndgameMessage(const char *message)
 {
-    // drawText(0, HEIGHT -1, WIDTH);
+    uint8_t i, x;
+    i = (uint8_t)strlen(message);
+    x = WIDTH / 2 - i / 2;
+
+    memset(xypos(0, HEIGHT - 2), 0x62, WIDTH);
+    memset(xypos(0, HEIGHT - 1), 0x40, x);
+    memset(xypos(x + i, HEIGHT - 1), 0x40, WIDTH - x - i);
+    drawText(x, HEIGHT - 1, message);
 }
 
 void drawBox(unsigned char x, unsigned char y, unsigned char w, unsigned char h)

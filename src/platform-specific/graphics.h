@@ -54,7 +54,7 @@ void drawGamefield(uint8_t quadrant, uint8_t *field);
 /// @param quadrant player index (0-3)
 /// @param gamefield pointer to 100 byte gamefield array from server
 /// @param attackPos 0-99 position of cell to update
-/// @param blink 0/1 - used to toggle between two "hit" sprites for animation
+/// @param flag 0/1 - used to toggle between two "hit" sprites for animation. 10-14 - cycle through attack animation
 void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t blink);
 
 /// @brief  Draw the cursor at the specified position on the specified gamefield

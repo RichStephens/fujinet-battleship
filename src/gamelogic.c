@@ -316,28 +316,41 @@ void renderGameboard()
         if (clientState.game.status > STATUS_GAMESTART)
         {
 
+            // Animate other player's attack
+            if (!skipAnim && state.prevActivePlayer != 0)
+            {
+                for (j = 10; j < 16; j++)
+                {
+                    for (i = 0; i < clientState.game.playerCount; i++)
+                    {
+                        if (clientState.game.players[i].playerStatus == PLAYER_STATUS_DEFAULT && i != state.prevActivePlayer)
+                            drawGamefieldUpdate(i, clientState.game.players[i].gamefield, clientState.game.lastAttackPos, j);
+                    }
+                    pause(5);
+                }
+            }
+
+            // Animate/render hit/miss
             for (j = (!skipAnim && clientState.game.status == STATUS_HIT) * 6; j < 255; --j)
             {
                 for (i = 0; i < clientState.game.playerCount; i++)
                 {
-                    if (i == state.prevActivePlayer)
-                        continue;
-
-                    drawGamefieldUpdate(i, clientState.game.players[i].gamefield, clientState.game.lastAttackPos, j & 1);
-                    if (!playedSound)
-                    {
-                        if (clientState.game.status == STATUS_HIT && clientState.game.players[i].gamefield[clientState.game.lastAttackPos] == FIELD_ATTACK)
-                        {
-                            soundHit();
-                            playedSound = 1;
-                        }
-                        else if (clientState.game.status == STATUS_MISS)
-                        {
-                            soundMiss();
-                            playedSound = 1;
-                        }
-                    }
+                    if (i != state.prevActivePlayer)
+                        drawGamefieldUpdate(i, clientState.game.players[i].gamefield, clientState.game.lastAttackPos, j & 1);
                 }
+                if (!playedSound)
+                {
+                    if (clientState.game.status > STATUS_MISS)
+                    {
+                        soundHit();
+                    }
+                    else
+                    {
+                        soundMiss();
+                    }
+                    playedSound = 1;
+                }
+
                 pause(4);
             }
         }
@@ -393,6 +406,7 @@ void renderGameboard()
     if (clientState.game.status == STATUS_GAMEOVER && (redraw || clientState.game.status != state.prevStatus))
     {
         drawEndgameMessage(clientState.game.prompt);
+
         if (clientState.game.status != state.prevStatus)
         {
             soundGameDone();
@@ -503,7 +517,7 @@ void processInput()
 void waitOnPlayerMove()
 {
     bool foundValidLocation;
-    uint8_t waitCount, frames, lastFrame, i, moved;
+    uint8_t waitCount, frames, lastFrame, i, j, moved, attackPos;
     uint16_t jifsPerSecond, maxJifs;
 
     resetTimer();
@@ -546,10 +560,22 @@ void waitOnPlayerMove()
         if (input.trigger)
         {
             soundAttack();
+            attackPos = posY * 10 + posX;
+
+            // Animate attack
+            for (j = 10; j < 16; j++)
+            {
+                for (i = 1; i < clientState.game.playerCount; i++)
+                {
+                    if (clientState.game.players[i].playerStatus == PLAYER_STATUS_DEFAULT)
+                        drawGamefieldUpdate(i, clientState.game.players[i].gamefield, attackPos, j);
+                }
+                pause(5);
+            }
 
             // Send command to score this value
             strcpy(moveBuffer, "attack/");
-            itoa(posY * 10 + posX, moveBuffer + strlen(moveBuffer), 10);
+            itoa(attackPos, moveBuffer + strlen(moveBuffer), 10);
             sendMove(moveBuffer);
 
             // Clear timer

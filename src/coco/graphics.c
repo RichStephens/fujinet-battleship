@@ -279,6 +279,7 @@ uint8_t *srcHit = &charset[(uint16_t)0x19 << 3];
 uint8_t *srcMiss = &charset[(uint16_t)0x1A << 3];
 uint8_t *srcHit2 = &charset[(uint16_t)0x1B << 3];
 uint8_t *srcHitLegend = &charset[(uint16_t)0x1C << 3];
+uint8_t *srcAttackAnimStart = &charset[(uint16_t)0x63 << 3];
 
 // Updates the gamefield display at attackPos
 void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t blink)
@@ -286,19 +287,29 @@ void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos
     uint8_t *src, *dest = (uint8_t *)SCREEN + quadrant_offset[quadrant] + fieldX + (uint16_t)(attackPos / 10) * 256 + (attackPos % 10);
     uint8_t j, c = gamefield[attackPos];
 
-    if (c == FIELD_ATTACK)
+    // Animate attack (checking for empty sea cells if animating attack for active player)
+    if (blink > 9 && (clientState.game.activePlayer > 0 || c == 0))
     {
-        src = blink ? srcHit2 : srcHit;
-    }
-    else if (c == FIELD_MISS)
-    {
-        src = srcMiss;
+        src = srcAttackAnimStart + (blink - 10) * 8;
     }
     else
     {
-        return;
+
+        if (c == FIELD_ATTACK)
+        {
+            src = blink ? srcHit2 : srcHit;
+        }
+        else if (c == FIELD_MISS)
+        {
+            src = srcMiss;
+        }
+        else
+        {
+            return;
+        }
     }
 
+    // Draw the updated cell
     for (j = 0; j < 8; ++j)
     {
         *dest = *src++;
