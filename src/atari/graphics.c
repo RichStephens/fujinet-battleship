@@ -201,6 +201,9 @@ void resetScreen()
         // Restore normal charset
         memcpy((void *)CHARSET_LOC, &charset, 1024);
         inGameCharSet = false;
+
+        // Clear any cursors
+        memset(PM_BASE + 1024, 0, 768);
     }
 }
 

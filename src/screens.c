@@ -47,7 +47,7 @@ void showHelpScreen()
     drawLine(WIDTH / 2 - 16, 2, 31);
     y = 3;
 
-    // 12345678901234567890123456789012
+    //                 12345678901234567890123456789012
     y++;
     drawTextAlt(X, y, "BATTLESHIP is a classic game of");
     y++;
@@ -116,6 +116,7 @@ void showPlayerNameScreen()
 {
     uint8_t i, y;
     resetScreen();
+    drawLogo();
 
     centerText(13, "ENTER YOUR NAME");
     drawBox(WIDTH / 2 - PLAYER_NAME_MAX / 2 - 1, 16, PLAYER_NAME_MAX + 1, 1);
@@ -416,7 +417,7 @@ void showInGameMenuScreen()
 
         drawBox(INGAME_MENU_X - 2, HEIGHT / 2 - 5, 19, y - (HEIGHT / 2 - 5) + 1);
 
-        centerTextAlt(HEIGHT - 1, "press TRIGGER/SPACE to close");
+        centerTextAlt(HEIGHT - 2, "press TRIGGER/SPACE to close");
 
         // centerTextAlt(y + 6, tempBuffer);
         clearCommonInput();
