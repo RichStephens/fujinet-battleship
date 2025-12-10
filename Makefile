@@ -84,6 +84,8 @@ atari/disk-post::
 #	Copy to fujinet-pc SD drive. On first run, mount that drive for future runs
 #	cp $(EXECUTABLE) ~/Documents/fujinetpc-atari/SD
 
+msdos/disk-post::
+	cp $(DISK) ~/tnfs/
 
 # Reset FujiNet-PC
 reset-fn:

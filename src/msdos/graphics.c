@@ -125,11 +125,12 @@ void plot_tile(const unsigned char *tile, unsigned char x, unsigned char y)
 void plot_char(unsigned char x,
                unsigned char y,
                unsigned char color,
-               unsigned char i,
+               unsigned char xor,
                char c)
 {
     unsigned char tile[16] = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0};
     unsigned char mask = 0xFF;
+    unsigned char i=0;
 
     // Optimization to just call plot_tile directly
     // If we're just doing white on color 0.
@@ -139,8 +140,8 @@ void plot_char(unsigned char x,
         return;
     }
 
-    if (i)
-        i=0xFF;
+    if (xor)
+        xor=0xFF;
 
     switch(color)
     {
@@ -157,26 +158,12 @@ void plot_char(unsigned char x,
         mask = 0xFF;
     }
 
-    // Yes, this is unrolled.
-    tile[0]=ascii[c][0] ^ i & mask;
-    tile[1]=ascii[c][1] ^ i & mask;
-    tile[2]=ascii[c][2] ^ i & mask;
-    tile[3]=ascii[c][3] ^ i & mask;
-    tile[4]=ascii[c][4] ^ i & mask;
-    tile[5]=ascii[c][5] ^ i & mask;
-    tile[6]=ascii[c][6] ^ i & mask;
-    tile[7]=ascii[c][7] ^ i & mask;
-    tile[8]=ascii[c][8] ^ i & mask;
-    tile[9]=ascii[c][9] ^ i & mask;
-    tile[10]=ascii[c][10] ^ i & mask;
-    tile[11]=ascii[c][11] ^ i & mask;
-    tile[12]=ascii[c][12] ^ i & mask;
-    tile[13]=ascii[c][13] ^ i & mask;
-    tile[14]=ascii[c][14] ^ i & mask;
-    tile[15]=ascii[c][15] ^ i & mask;
-    tile[16]=ascii[c][16] ^ i & mask;
+    for (i=0;i<sizeof(tile);i++)
+    {
+        tile[i] = ascii[c][i] & mask ^ xor;
+    }
 
-    plot_tile(tile, x, y);
+    plot_tile(&tile[0], x, y);
 }
 
 /**
@@ -264,6 +251,18 @@ void initGraphics()
 }
 
 /**
+ * @brief Reset to previous video mode
+ */
+void resetGraphics(void)
+{
+    union REGS r;
+
+    r.h.ah = 0x00;
+    r.h.al = prevVideoMode;
+    int86(0x10,&r,&r);
+}
+
+/**
  * @brief Store screen buffer into secondary buffer
  * @verbose not used.
  */
@@ -312,19 +311,14 @@ void drawTextAlt(unsigned char x, unsigned char y, const char *s)
 
     while (c = *s++)
     {
-        if (c>90 || (c < 65 && c > 32))
+        if (c >= 'A' && c <= 'Z')
         {
-            if (inGameCharSet && y == HEIGHT - 1 && c >= 0x30 && c <= 0x39)
-                plot_char(x++, y, 1, 0, c);
+            plot_char(x++, y, 2, 0, c);
         }
-
-        if (x>39)
+        else
         {
-            x=0;
-            y++;
+            plot_char(x++, y, 3, 0, c);
         }
-
-        plot_char(x++, y, 3, 0, c);
     }
 }
 
@@ -840,7 +834,7 @@ void drawEndgameMessage(const char *message)
 void drawBox(unsigned char x, unsigned char y, unsigned char w, unsigned char h)
 {
     drawIcon(x, y, 0x3b);
-    drawIcon(x+w,y,0x3c);
-    drawIcon(x, y+h, 0x3D);
-    drawIcon(x+w, y+h, 0x3E);
+    drawIcon(x+w+1,y,0x3c);
+    drawIcon(x, y+h+1, 0x3D);
+    drawIcon(x+w+1, y+h+1, 0x3E);
 }

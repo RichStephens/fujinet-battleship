@@ -33,6 +33,8 @@ void mount()
 
 void quit()
 {
+    resetGraphics();
+    exit(0);
 }
 
 void housekeeping()
