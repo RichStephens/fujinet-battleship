@@ -30,7 +30,7 @@ extern void irqVsyncWait(void);
 #define TILE_BORDER1_BOTTOM_L 0x2a
 #define TILE_BORDER1_BOTTOM_R 0x2b
 #define TILE_BORDER1_BOTTOM 0x49
-
+#define TILE_LINE_H 0x5F
 // These seem to be at 40
 #define TILE_BOTTOM_BORDER_START 0x40
 #define TILE_BOTTOM_BORDER_END 0x41
@@ -41,6 +41,8 @@ extern void irqVsyncWait(void);
 #define TILE_HIT2 0x3b // lub 9b, było 0x1B
 
 #define TILE_HIT_LEGOND 0x3c // ???(0x2D + MAGIC_SHIFT3)   // -
+
+#define TILE_ACTIVE_INDICATOR 0x1b
 
 // ????
 
@@ -57,7 +59,7 @@ extern void irqVsyncWait(void);
 #define TILE_BOTTOM_RIGHT_CORNET 0x5e
 
 #define MAGIC_SHIFT4 32
-#define TILE_CLOCK (0x43 + MAGIC_SHIFT4)
+#define TILE_CLOCK 0x3d
 #define TILE_MISS (0x58 + MAGIC_SHIFT4)         // X
 #define TILE_CURSOR (0x5B + MAGIC_SHIFT4)
 // #define TILE_NAME_START (0x5C + MAGIC_SHIFT4)
@@ -87,17 +89,11 @@ extern void irqVsyncWait(void);
 #define VIC_MEMORY_SETUP_REGISTER 0xD018
 #define CIA2_VIDEO_BANK_REGISTER 0xDD00
 
-static uint8_t colorMode = 0, colIndex = 0, fieldX = 0, playerCount = 0;
-static bool inGameCharSet = false;
-
-// Buffers to save/restore the visible screen (1000 bytes = 40x25)
-static uint8_t saved_screen[1000];
-static uint8_t saved_color[1000];
-static bool saved_screen_valid = false;
+static uint8_t fieldX = 0, playerCount = 0;
 
 // State for VIC bank switching to use RAM charset at CHARSET_LOC ($1000)
-static uint8_t _saved_port01 = 0;
 static uint8_t _saved_d018 = 0;
+static uint8_t _saved_dd00 = 0;
 
 static uint16_t quadrant_offset[] = {
     WIDTH * 14 + 8,
@@ -111,13 +107,20 @@ uint8_t legendShipOffset[] = {2, 1, 0, 40 * 5, 40 * 6 + 1};
 void drawTextAdd(uint8_t *dest, const char *s, uint8_t add);
 void drawShipInternal(uint8_t *dest, uint8_t size, uint8_t delta);
 
-static void enableCustomCharset(void);
-static void disableCustomCharset(void);
-
 unsigned char toLowerCase(unsigned char c)
 {
-    if (c >= 97-32 && c <= 122-32) return c - 64;
-    else return c;
+    if (c >= 64 && c <= 96)
+    {
+        // Use alternate numbers if showing the clock
+        // if (y == HEIGHT - 1 && c >= 0x30 && c <= 0x39)
+        //     c += 0x60;
+        c -= 64;
+    } else if (c >= 0x60 && c <= 0x7F) {
+        // lowercase letters
+        c -= 0x60;
+    };
+        
+    return c;
 };
 
 unsigned char cycleNextColor()
@@ -127,22 +130,27 @@ unsigned char cycleNextColor()
 
 void initGraphics()
 {
-    // Set up screen parameters
-    // Put character set in RAM at $1000 if needed (most C64 programs use built-in ROM)
-    // Copy included `charset` binary into RAM at `CHARSET_LOC` so custom glyphs are available.
-    // NOTE: depending on your memory configuration you may also need to adjust the VIC-II
-    // bank/registers (eg. $01 and $D018) to make this RAM visible to the video chip. Many
-    // emulators and setups already allow $1000-$1FFF to be writable; if characters look
-    // incorrect you'll need to enable the VIC to use RAM-based charset.
-    // Ensure VIC is configured to use RAM charset, then copy charset into RAM
-    enableCustomCharset();
-    
+    // TODO - move C stack below $C000 !!!
+    memcpy((void *)CHARSET_LOC, &charset, 2048);
+    // Configure the C64's memory layout for custom character set:
+    // 1. Set up RAM bank for character ROM access
+    // CIA2 port A (56576) controls RAM bank selection
+    // Mask with 252 (11111100) to select the correct bank 3 for $C000
+    _saved_dd00 = PEEK(CIA2_VIDEO_BANK_REGISTER);    
+    POKE(CIA2_VIDEO_BANK_REGISTER,PEEK(CIA2_VIDEO_BANK_REGISTER)&252);
+    // 2. Configure VIC-II to use our custom character set
+    // VIC_MEMORY_SETUP_REGISTER is the VIC-II control register for character ROM location
+    // Setting to 32 tells VIC-II to use character ROM at $2000 (8192)
+    // This points to our custom character set loaded at $C000
+    // characters at offset 0, screen memory starts at $Cc00
+    _saved_d018 = PEEK(VIC_MEMORY_SETUP_REGISTER);
+    POKE(VIC_MEMORY_SETUP_REGISTER,0x30); 
+
     // Set border and background colors
     POKE(0xD020, COLOR_BORDER); // Border color
     POKE(0xD021, COLOR_BG);     // Background color
     // Enable multicolor character mode (set bit 4 in VIC register $D016)
-    POKE(0xD016, PEEK(0xD016) | 0x10);
-    
+    POKE(0xD016, PEEK(0xD016) | 0x1);    
     // Clear screen memory
     memset(SCREEN_LOC, TILE_SEA, 1000);
     
@@ -156,27 +164,18 @@ void resetGraphics()
     POKE(0xD020, 254);
     POKE(0xD021, 246);
     // Restore previous memory mapping (if we changed it)
-    disableCustomCharset();
+    POKE(VIC_MEMORY_SETUP_REGISTER, _saved_d018);
+    POKE(CIA2_VIDEO_BANK_REGISTER, _saved_dd00);
     memset(SCREEN_LOC, TILE_SEA, 1000);
 }
 
 bool saveScreenBuffer()
 {
-    // Save screen (characters) and color RAM into local buffers
-    memcpy(saved_screen, SCREEN_LOC, 1000);
-    memcpy(saved_color, COLOR_LOC, 1000);
-    saved_screen_valid = true;
-    return true;
+    return false;
 }
 
 void restoreScreenBuffer()
 {
-    if (!saved_screen_valid)
-        return;
-
-    memcpy(SCREEN_LOC, saved_screen, 1000);
-    memcpy(COLOR_LOC, saved_color, 1000);
-    saved_screen_valid = false;
 }
 
 void drawText(unsigned char x, unsigned char y, const char *s)
@@ -187,7 +186,6 @@ void drawText(unsigned char x, unsigned char y, const char *s)
 
     while ((c = *s++))
     {
-        // Convert to uppercase PETSCII if needed
         c = toLowerCase(c);        
         *pos++ = c;
         *col_pos++ = COLOR_TEXT;
@@ -196,14 +194,15 @@ void drawText(unsigned char x, unsigned char y, const char *s)
 
 void drawTextAlt(unsigned char x, unsigned char y, const char *s)
 {
-    uint8_t *pos = xypos(x, y);
+    static uint8_t c;
+    static uint8_t *pos;
     uint8_t *col_pos = colorpos(x, y);
-    uint8_t c;
-    uint8_t color;
+    static uint8_t color;
 
-    while ((c = *s++))
+    pos = xypos(x, y);
+
+    while (c = *s++)
     {
-        // Uppercase letters get alternate color
         if (c >= 65 && c <= 90)
         {
             color = COLOR_HIT;  // Alternate color
@@ -212,13 +211,14 @@ void drawTextAlt(unsigned char x, unsigned char y, const char *s)
         {
             color = COLOR_TEXT;
         }
-        
+
         c = toLowerCase(c);
 
         *pos++ = c;
         *col_pos++ = color;
     }
 }
+
 
 void resetScreen()
 {
@@ -228,7 +228,7 @@ void resetScreen()
 
 void drawIcon(unsigned char x, unsigned char y, unsigned char icon)
 {
-    *xypos(x, y) = icon+32;
+    *xypos(x, y) = icon;
     *colorpos(x, y) = COLOR_CURSOR;
 }
 
@@ -246,13 +246,13 @@ void drawSpace(unsigned char x, unsigned char y, unsigned char w)
 
 void drawClock()
 {
-    POKE(xypos(WIDTH - 1, HEIGHT - 1), 0x9d);
+    POKE(xypos(WIDTH - 1, HEIGHT - 1), TILE_CLOCK);
     *colorpos(WIDTH - 1, HEIGHT - 1) = COLOR_CURSOR;
 }
 
 void drawConnectionIcon(bool show)
 {
-    POKEW(xypos(0, HEIGHT - 1), show ? 0x9f9e : 0);
+    POKEW(xypos(0, HEIGHT - 1), show ? 0x3f3e : 0);
     *colorpos(0, HEIGHT - 1) = COLOR_CURSOR;
 }
 
@@ -283,8 +283,8 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
         // Bottom player boards
 
         // Thin horizontal border
-        dest[0] = 0x08 + add;
-        dest[11] = 0x09 + add;
+        dest[0] = TILE_BORDER1_TOP_L + add;
+        dest[11] = TILE_BORDER1_TOP_R + add;
         memset(dest + 1, 0x27 + add, 10);
 
         // Name Label
@@ -296,13 +296,13 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
         // Active indicator
         if (active)
         {
-            dest[WIDTH * 11 + 1] = 0x5b;
+            dest[WIDTH * 11 + 1] = TILE_ACTIVE_INDICATOR;
         }
 
         // Bottom border below name label
-        dest[WIDTH * 12] = 0x20 + add;
-        dest[WIDTH * 12 + 11] = 0x21 + add;
-        memset(WIDTH * 12 + 1 + dest, 0x28 + add, 10);
+        dest[WIDTH * 12] = TILE_BOTTOM_BORDER_START + add;
+        dest[WIDTH * 12 + 11] = TILE_BOTTOM_BORDER_END + add;
+        memset(WIDTH * 12 + 1 + dest, TILE_BOTTOM_BORDER + add, 10);
     }
     else
     {
@@ -322,13 +322,13 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
         // Active indicator
         if (active)
         {
-            dest[1] = 0x5b;
+            dest[1] = TILE_ACTIVE_INDICATOR;
         }
 
         // Thin horizontal border
-        dest[WIDTH * 11] = 0x0A + add;
-        dest[WIDTH * 11 + 11] = 0x0B + add;
-        memset(WIDTH * 11 + 1 + dest, 0x29 + add, 10);
+        dest[WIDTH * 11] = TILE_BORDER1_BOTTOM_L + add;
+        dest[WIDTH * 11 + 11] = TILE_BORDER1_BOTTOM_L + add;
+        memset(WIDTH * 11 + 1 + dest, TILE_BORDER1_BOTTOM + add, 10);
     }
 
     // Draw left/right borders and drawers
@@ -386,22 +386,22 @@ void drawBoard(uint8_t currentPlayerCount)
     playerCount = currentPlayerCount;
     fieldX = playerCount > 2 ? 0 : 7;
 
-    if (playerCount > 1 && !inGameCharSet)
-    {
-        // Invert 0-9 & A-Z characters for in-game charset
-        inGameCharSet = true;
+    // if (playerCount > 1 && !inGameCharSet)
+    // {
+    //     // Invert 0-9 & A-Z characters for in-game charset
+    //     inGameCharSet = true;
 
-        dest = CHARSET_LOC + 0x01 * 8;
-        while (dest < CHARSET_LOC + 0x5b * 8)
-        {
-            *dest = *dest ^ 0xff | 0b01010101;
-            dest++;
-            if (dest == CHARSET_LOC + 0x1A * 8)
-                dest = CHARSET_LOC + 0x40 * 8;
-            if (dest == CHARSET_LOC + 0x02 * 8)
-                dest = CHARSET_LOC + 0x10 * 8;
-        }
-    }
+    //     dest = CHARSET_LOC + 0x01 * 8;
+    //     while (dest < CHARSET_LOC + 0x5b * 8)
+    //     {
+    //         *dest = *dest ^ 0xff | 0b01010101;
+    //         dest++;
+    //         if (dest == CHARSET_LOC + 0x1A * 8)
+    //             dest = CHARSET_LOC + 0x40 * 8;
+    //         if (dest == CHARSET_LOC + 0x02 * 8)
+    //             dest = CHARSET_LOC + 0x10 * 8;
+    //     }
+    // }
 
     for (i = 0; i < playerCount; i++)
     {
@@ -437,33 +437,32 @@ void drawBoard(uint8_t currentPlayerCount)
 
 void drawLine(unsigned char x, unsigned char y, unsigned char w)
 {
-    memset(xypos(x, y), 0x3F, w);
+    memset(xypos(x, y), TILE_LINE_H, w);
 }
 
 void drawShipInternal(uint8_t *dest, uint8_t size, uint8_t delta)
 {
     static uint8_t i;
-    uint8_t c = 0x32;
-    uint8_t *src;
+    uint8_t c = TILE_SHIP_LEFT;
     if (delta)
-        c = 0x37;
+        c = TILE_SHIP_TOP;
 
     for (i = 0; i < size; i++)
     {
         *dest = c;
         if (delta)
         {
-            c = 0x36;
+            c = TILE_SHIP_HULL_V;
             if (i == size - 2)
-                c = 0x35;
+                c = TILE_SHIP_BOTTOM;
             dest += WIDTH;
         }
         else
         {
             dest++;
-            c = 0x33;
+            c = TILE_SHIP_HULL_H;
             if (i == size - 2)
-                c = 0x34;
+                c = TILE_SHIP_RIGHT;
         }
     }
 }
@@ -613,56 +612,5 @@ void drawBox(unsigned char x, unsigned char y, unsigned char w, unsigned char h)
 void waitvsync()
 {
     //irqVsyncWait();
-}
-
-// Enable VIC to use RAM-based charset at CHARSET_LOC. Saves previous $0001 and $D018.
-static void enableCustomCharset(void)
-{
-    if (inGameCharSet)
-        return;
-
-    memcpy((void *)CHARSET_LOC, &charset, 2048);
-
-
-    // _saved_port01 = PEEK(1);
-    // _saved_d018 = PEEK(0xD018);
-
-    // // Clear CHAREN (bit 2) in $01 so character ROM is not forced; keep other bits.
-    // // This makes character ROM (if present) not visible to the VIC so RAM charset can be used.
-    // POKE(1, _saved_port01 & ~0x04);
-
-    // // Set character memory base in $D018. We set lower bits to point to $1000.
-    // // The exact bit layout varies; this write attempts to set char base to $1000 while
-    // // preserving the high bits. If your setup requires a different value, adjust accordingly.
-    // POKE(0xD018, (_saved_d018 & 0xF8) | 0x04);
-
-    // Configure the C64's memory layout for custom character set:
-    // 1. Set up RAM bank for character ROM access
-    // CIA2 port A (56576) controls RAM bank selection
-    // Mask with 252 (11111100) to select the correct bank 3 for $C000    
-    POKE(CIA2_VIDEO_BANK_REGISTER,PEEK(CIA2_VIDEO_BANK_REGISTER)&252);
-    // 2. Configure VIC-II to use our custom character set
-    // VIC_MEMORY_SETUP_REGISTER is the VIC-II control register for character ROM location
-    // Setting to 32 tells VIC-II to use character ROM at $2000 (8192)
-    // This points to our custom character set loaded at $C000
-    // characters at offset 0, screen memory starts at $0c00
-    POKE(VIC_MEMORY_SETUP_REGISTER,0x30); 
-    // 3. Set the cursor character to use our custom character set
-    // 648 is the cursor character location in memory
-    // Setting to 200 makes cursor use character code 200 from our set
-    //POKE(648,200);
-
-    inGameCharSet = true;
-}
-
-// Restore previous memory mapping
-static void disableCustomCharset(void)
-{
-    if (!inGameCharSet)
-        return;
-
-    POKE(0xD018, _saved_d018);
-    POKE(1, _saved_port01);
-    inGameCharSet = false;
 }
 
