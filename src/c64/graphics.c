@@ -94,6 +94,7 @@ static uint8_t fieldX = 0, playerCount = 0;
 // State for VIC bank switching to use RAM charset at CHARSET_LOC ($1000)
 static uint8_t _saved_d018 = 0;
 static uint8_t _saved_dd00 = 0;
+static uint8_t _saved_d016 = 0;
 
 static uint16_t quadrant_offset[] = {
     WIDTH * 14 + 8,
@@ -130,7 +131,6 @@ unsigned char cycleNextColor()
 
 void initGraphics()
 {
-    // TODO - move C stack below $C000 !!!
     memcpy((void *)CHARSET_LOC, &charset, 2048);
     // Configure the C64's memory layout for custom character set:
     // 1. Set up RAM bank for character ROM access
@@ -150,7 +150,8 @@ void initGraphics()
     POKE(0xD020, COLOR_BORDER); // Border color
     POKE(0xD021, COLOR_BG);     // Background color
     // Enable multicolor character mode (set bit 4 in VIC register $D016)
-    POKE(0xD016, PEEK(0xD016) | 0x1);    
+    _saved_d016 = PEEK(0xD016);
+    POKE(0xD016, PEEK(0xD016) | 0x10);    
     // Clear screen memory
     memset(SCREEN_LOC, TILE_SEA, 1000);
     
@@ -166,6 +167,7 @@ void resetGraphics()
     // Restore previous memory mapping (if we changed it)
     POKE(VIC_MEMORY_SETUP_REGISTER, _saved_d018);
     POKE(CIA2_VIDEO_BANK_REGISTER, _saved_dd00);
+    POKE(0xD016, _saved_d016);
     memset(SCREEN_LOC, TILE_SEA, 1000);
 }
 
@@ -438,6 +440,7 @@ void drawBoard(uint8_t currentPlayerCount)
 void drawLine(unsigned char x, unsigned char y, unsigned char w)
 {
     memset(xypos(x, y), TILE_LINE_H, w);
+    memset(colorpos(x, y), 8, w);
 }
 
 void drawShipInternal(uint8_t *dest, uint8_t size, uint8_t delta)
@@ -601,12 +604,18 @@ void drawEndgameMessage(const char *message)
 
 void drawBox(unsigned char x, unsigned char y, unsigned char w, unsigned char h)
 {
+    
     uint8_t *pos = xypos(x, y);
+    uint8_t *col_pos = colorpos(x, y);
     // Draw corners
     *pos = TILE_TOP_LEFT_CORNET;
+    *col_pos = 8;
     pos[w + 1] = TILE_TOP_RIGHT_CORNET;
+    col_pos[w + 1] = 8;
     pos[h * WIDTH + WIDTH] = TILE_BOTTOM_LEFT_CORNET;
+    col_pos[h * WIDTH + WIDTH] = 8;
     pos[w + h * WIDTH + WIDTH + 1] = TILE_BOTTOM_RIGHT_CORNET;
+    col_pos[w + h * WIDTH + WIDTH + 1] = 8;
 }
 
 void waitvsync()
