@@ -37,7 +37,6 @@
 
 uint16_t ii;
 
-// SID clock used for conversion (PAL C64 ~985248 Hz). Using the exact clock keeps pitch accurate.
 #define SID_CLOCK 985248UL
 
 // Convert a frequency in Hz to a 16-bit SID frequency word (Fn)
@@ -64,9 +63,6 @@ uint16_t hz_to_sidfn(uint16_t hz)
     return (uint16_t)fn;
 }
 
-// Busy-wait for approximately `ms` milliseconds using CIA timer helpers
-// from `util.c` (`resetTimer` and `getTime`). This function handles
-// the 16-bit wraparound properly by accumulating deltas.
 void wait_ms(uint16_t ms)
 {
     uint32_t target_us;
@@ -79,7 +75,6 @@ void wait_ms(uint16_t ms)
 
     target_us = (uint32_t)ms * 1000U;
 
-    // Start fresh
     resetTimer();
     elapsed = 0;
     last = getTime();
@@ -97,9 +92,6 @@ void initSound()
     POKE(SID_FILTER_MODE_VOL, 0x0F);  // Set volume to max, no filter
 }
 
-// Small helper to play a tone on any of the 3 SID voices (voiceIndex 0..2)
-// This is blocking and mirrors playToneFull but allows selecting voice 1..3.
-// extra_ctrl_bits: additional bits ORed into the control register (e.g. RING, SYNC, TEST)
 void playToneVoice(uint8_t voiceIndex, uint16_t frequency, uint8_t duration, uint8_t waveform, uint16_t pulseWidth, uint8_t attack_decay, uint8_t sustain_release, uint8_t extra_ctrl_bits)
 {
     uint32_t base = SID_BASE + (uint32_t)voiceIndex * 7;
@@ -128,7 +120,6 @@ void playToneVoice(uint8_t voiceIndex, uint16_t frequency, uint8_t duration, uin
 // Stop any playing sound (clears all voice gates)
 void soundStop()
 {
-    // Clear control registers for all three voices
     POKE(SID_BASE + 4, 0);
     POKE(SID_BASE + 7 + 4, 0);
     POKE(SID_BASE + 14 + 4, 0);
