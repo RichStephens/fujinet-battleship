@@ -1,4 +1,4 @@
-#include <joystick.h>
+#include "include/joystick.h"
 #include <string.h>
 #include "platform-specific/graphics.h"
 #include "platform-specific/input.h"

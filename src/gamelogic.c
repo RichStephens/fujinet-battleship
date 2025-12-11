@@ -7,7 +7,11 @@
 #include "misc.h"
 #include "stateclient.h"
 #include "screens.h"
-#include <peekpoke.h>
+//#include <peekpoke.h>
+
+#ifdef __WATCOMC__
+#define cgetc getch
+#endif /* __WATCOMC__ */
 
 #ifndef TIMER_WIDTH
 #define TIMER_WIDTH 1

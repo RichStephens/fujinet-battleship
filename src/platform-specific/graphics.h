@@ -102,3 +102,4 @@ void resetGraphics();
 /// @brief Wait for vertical sync
 void waitvsync();
 #endif /* GRAPHICS_H */
+

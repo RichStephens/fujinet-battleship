@@ -1,7 +1,7 @@
 #ifndef MISC_H
 #define MISC_H
 
-#include <joystick.h>
+//#include <joystick.h>
 #include <conio.h>
 #include "platform-specific/graphics.h"
 #include "platform-specific/input.h"
@@ -132,7 +132,7 @@ typedef struct
 
 typedef struct
 {
-    uint8_t key;
+    uint16_t key;
     bool trigger;
     int8_t dirX;
     int8_t dirY;
