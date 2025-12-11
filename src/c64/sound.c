@@ -37,84 +37,163 @@
 
 uint16_t ii;
 
+// SID clock used for conversion (PAL C64 ~985248 Hz). Using the exact clock keeps pitch accurate.
+#define SID_CLOCK 985248UL
+
+// Convert a frequency in Hz to a 16-bit SID frequency word (Fn)
+// Formula from SID docs: Fout = Fn * Fclk / 16777216
+// Therefore Fn = Fout * 16777216 / Fclk
+// Returns 0 on input 0, clamps to 0xFFFF on overflow.
+// Implemented without 64-bit math (cc65) by factoring 16777216 = 65536 * 256.
+uint16_t hz_to_sidfn(uint16_t hz)
+{
+    uint32_t fn;
+    uint32_t numerator;
+    uint32_t denominator;
+
+    if (hz == 0) return 0;
+
+    // Fn = (hz * 65536) / (Fclk / 256)
+    // This keeps the intermediate within 32 bits for typical audio frequencies.
+    numerator = (uint32_t)hz * 65536UL;
+    denominator = SID_CLOCK / 256UL;
+    if (denominator == 0) return 0;
+
+    fn = numerator / denominator;
+    if (fn > 0xFFFFU) return 0xFFFFU;
+    return (uint16_t)fn;
+}
+
+// Busy-wait for approximately `ms` milliseconds using CIA timer helpers
+// from `util.c` (`resetTimer` and `getTime`). This function handles
+// the 16-bit wraparound properly by accumulating deltas.
+void wait_ms(uint16_t ms)
+{
+    uint32_t target_us;
+    uint32_t elapsed;
+    uint16_t last;
+    uint16_t now;
+    uint16_t delta;
+    
+    if (ms == 0) return;
+
+    target_us = (uint32_t)ms * 1000U;
+
+    // Start fresh
+    resetTimer();
+    elapsed = 0;
+    last = getTime();
+
+    while (elapsed < target_us) {
+        now = getTime();
+        delta = now - last; // unsigned wrap-around safe
+        elapsed += delta;
+        last = now;
+    }
+}
+
 void initSound()
 {
     POKE(SID_FILTER_MODE_VOL, 0x0F);  // Set volume to max, no filter
 }
 
-// More capable play function: frequency is 16-bit SID tone value
-// duration is in milliseconds
+// Small helper to play a tone on any of the 3 SID voices (voiceIndex 0..2)
+// This is blocking and mirrors playToneFull but allows selecting voice 1..3.
+// extra_ctrl_bits: additional bits ORed into the control register (e.g. RING, SYNC, TEST)
+void playToneVoice(uint8_t voiceIndex, uint16_t frequency, uint8_t duration, uint8_t waveform, uint16_t pulseWidth, uint8_t attack_decay, uint8_t sustain_release, uint8_t extra_ctrl_bits)
+{
+    uint32_t base = SID_BASE + (uint32_t)voiceIndex * 7;
+    uint16_t sidfn = hz_to_sidfn(frequency);
+    uint16_t pw12 = pulseWidth & 0x0FFF;
+
+    if (voiceIndex > 2) return;
+    if (frequency == 0 && waveform == 0) return;
+
+    POKE(base + 0, sidfn & 0xFF); // FREQ LO
+    POKE(base + 1, sidfn >> 8);   // FREQ HI
+    POKE(base + 2, pw12 & 0xFF);  // PW LO
+    POKE(base + 3, (pw12 >> 8) & 0x0F); // PW HI (only low 4 bits used)
+    POKE(base + 5, attack_decay);
+    POKE(base + 6, sustain_release);
+
+    // Trigger the envelope
+    POKE(base + 4, waveform | GATE_ON | extra_ctrl_bits);
+
+    wait_ms(duration);
+
+    // Stop (begin release)
+    POKE(base + 4, waveform & ~GATE_ON);
+}
+
+// Arguments:
+// - frequency: Hz value (will be converted to SID Fn internally)
+// - duration: milliseconds to play the tone
+// - waveform: control bits (WAVEFORM_TRIANGLE, WAVEFORM_SAWTOOTH, WAVEFORM_PULSE, WAVEFORM_NOISE)
+// - pulseWidth: 12-bit pulse width (0x0000..0x0FFF; only used if WAVEFORM_PULSE selected)
+// - attack_decay: SID ADSR register value (attack in bits 4-7, decay in bits 0-3)
+// - sustain_release: SID ADSR register value (sustain in bits 4-7, release in bits 0-3)
+// This function is BLOCKING: it plays the tone for the specified duration then returns.
 void playToneFull(uint16_t frequency, uint8_t duration, uint8_t waveform, uint16_t pulseWidth, uint8_t attack_decay, uint8_t sustain_release)
 {
-    uint16_t elapsed = 0;
-    uint16_t duration_ticks = 0;
-    uint16_t release_ticks = 0;
-
-    if (prefs.disableSound)
-        return;
-
-    // Set frequency (16-bit)
-    POKE(SID_FREQ_LO, frequency & 0xFF);
-    POKE(SID_FREQ_HI, (frequency >> 8) & 0xFF);
-
-    // Set pulse width (12-bit) - low and high parts
-    POKE(SID_PW_LO, pulseWidth & 0xFF);
-    POKE(SID_PW_HI, (pulseWidth >> 8) & 0x0F);
-
-    // Set envelope (ADSR)
+    uint16_t sidfn;
+    uint16_t pw12;
+    
+    // Convert frequency from Hz to SID 16-bit Fn
+    sidfn = hz_to_sidfn(frequency);
+    
+    // Write SID voice 1 registers (base = 0xD400)
+    POKE(SID_FREQ_LO, sidfn & 0xFF);
+    POKE(SID_FREQ_HI, sidfn >> 8);
+    
+    // Clamp and write pulse width (12-bit)
+    pw12 = pulseWidth & 0x0FFF;
+    POKE(SID_PW_LO, pw12 & 0xFF);
+    POKE(SID_PW_HI, (pw12 >> 8) & 0x0F);
+    
+    // Write ADSR envelope parameters
     POKE(SID_ATTACK_DECAY, attack_decay);
     POKE(SID_SUSTAIN_RELEASE, sustain_release);
-
-    // Gate on with requested waveform
-    POKE(SID_CONTROL, waveform | GATE_ON);
-
-    // Play for specified duration in milliseconds
-    resetTimer();
-    duration_ticks = (uint16_t)duration * 1000;  // Convert ms to approximate clock ticks
-    while (elapsed < duration_ticks) {
-        elapsed = getTime();
-    }
-
-    // Gate off (stop sound) - this triggers RELEASE phase
-    POKE(SID_CONTROL, waveform);
     
-    // Wait for release phase to complete (approximately 100-200ms for typical release times)
-    resetTimer();
-    elapsed = 0;
-    release_ticks = 150000;  // Wait ~150ms for release
-    while (elapsed < release_ticks) {
-        elapsed = getTime();
-    }
+    // Set waveform and gate on to trigger the envelope
+    POKE(SID_CONTROL, waveform | GATE_ON);
+    
+    // Wait for the specified duration
+    wait_ms(duration);
+    
+    // Clear gate bit to begin release phase
+    POKE(SID_CONTROL, waveform & ~GATE_ON);
 }
+
+// This is a battleship game, please try to keep the sounds appropriate
+// They should sound modern, but fit within the limitations of the SID chip
+
+// Stop any playing sound (clears all voice gates)
+void soundStop()
+{
+    // Clear control registers for all three voices
+    POKE(SID_BASE + 4, 0);
+    POKE(SID_BASE + 7 + 4, 0);
+    POKE(SID_BASE + 14 + 4, 0);
+}
+
+static uint8_t keySoundsEnabled = 1;
 
 void soundCursor()
 {
-    if (prefs.disableSound)
+    if (prefs.disableSound || !keySoundsEnabled)
         return;
 
-    // short pulse clicks (narrow pulsewidth)
-    playToneFull(1678, 33, WAVEFORM_PULSE, 0x0400, 0x96, 0x33);
-    playToneFull(2013, 33, WAVEFORM_PULSE, 0x0400, 0x96, 0x33);
-    playToneFull(2349, 33, WAVEFORM_PULSE, 0x0400, 0x96, 0x33);
+    // small blip
+    playToneVoice(0, 900, 40, WAVEFORM_PULSE, 0x0800, 0x12, 0x02, 0x00);
 }
 
 void soundSelect()
 {
-    if (prefs.disableSound)
+    if (prefs.disableSound || !keySoundsEnabled)
         return;
 
-    // Modern selection sound: quick bright rising arpeggio followed by a small sparkle
-    playToneFull(3691, 16, WAVEFORM_PULSE, 0x0400, 0x94, 0x33);
-    playToneFull(4362, 16, WAVEFORM_PULSE, 0x0600, 0x84, 0x33);
-    playToneFull(5033, 33, WAVEFORM_PULSE, 0x0800, 0x84, 0x44);
-    // small high sparkle to finish
-    playToneFull(13422, 16, WAVEFORM_TRIANGLE, 0, 0x92, 0x33);
-}
-
-void soundStop()
-{
-    // Stop any playing sound
-    POKE(SID_CONTROL, 0);
+    // slightly sharper blip
+    playToneVoice(0, 1400, 50, WAVEFORM_PULSE, 0x0700, 0x11, 0x02, 0x00);
 }
 
 void soundJoinGame()
@@ -122,114 +201,30 @@ void soundJoinGame()
     if (prefs.disableSound)
         return;
 
-    // Cheerful short melody using triangle with gentle envelope
-    playToneFull(1342, 100, WAVEFORM_TRIANGLE, 0, 0x63, 0x54);
-    playToneFull(1007, 100, WAVEFORM_TRIANGLE, 0, 0x63, 0x54);
-    playToneFull(1678, 133, WAVEFORM_TRIANGLE, 0, 0x63, 0x54);
+    // three short rising notes
+    playToneVoice(0, 700, 80, WAVEFORM_SAWTOOTH, 0x000, 0x14, 0x03, 0x00);
+    playToneVoice(0, 900, 80, WAVEFORM_SAWTOOTH, 0x000, 0x14, 0x03, 0x00);
+    playToneVoice(0, 1100, 140, WAVEFORM_SAWTOOTH, 0x000, 0x14, 0x04, 0x00);
 }
 
 void soundMyTurn()
 {
-    uint8_t prevCtrl1, prevCtrl2, prevFilter;
-    uint16_t v1freq, v2freq;
     if (prefs.disableSound)
         return;
 
-    // Bell/gong-like: use two voices with ring modulation to produce metallic overtones.
-    // Save previous control/filter registers so we can restore them.
-    prevCtrl1 = PEEK(SID_CONTROL);
-    prevCtrl2 = PEEK(SID_CONTROL + 7);
-    prevFilter = PEEK(SID_FILTER_MODE_VOL);
-
-    // Tweak filter to allow some body for the gong
-    POKE(SID_FILTER_MODE_VOL, (prevFilter & 0xF0) | 0x08);
-
-    // Voice 1: lower fundamental (triangle)
-    v1freq = 2517;
-    POKE(SID_FREQ_LO, v1freq & 0xFF);
-    POKE(SID_FREQ_HI, (v1freq >> 8) & 0xFF);
-    POKE(SID_ATTACK_DECAY, 0xF4);    // fast attack, moderate decay
-    POKE(SID_SUSTAIN_RELEASE, 0x44);  // medium sustain, medium release
-
-    // Voice 2: higher partial to ring-modulate (triangle), placed at voice2 registers (+7)
-    v2freq = 15099;
-    POKE(SID_FREQ_LO + 7, v2freq & 0xFF);
-    POKE(SID_FREQ_HI + 7, (v2freq >> 8) & 0xFF);
-    POKE(SID_ATTACK_DECAY + 7, 0xE4);   // quick attack, longer decay
-    POKE(SID_SUSTAIN_RELEASE + 7, 0x33); // lower sustain, moderate release
-
-    // Gate both voices on; enable ring modulation on voice2 (bit 0x04)
-    POKE(SID_CONTROL, WAVEFORM_TRIANGLE | GATE_ON);
-    POKE(SID_CONTROL + 7, WAVEFORM_TRIANGLE | GATE_ON | 0x04);
-
-    // Let the gong ring for a short period (coarse frames)
-    {
-        uint8_t t = 20;
-        while (t--)
-            for (ii = 0; ii < 200; ii++)
-                ;
-    }
-
-    // Gate off and restore previous control/filter states
-    POKE(SID_CONTROL + 7, WAVEFORM_TRIANGLE);
-    POKE(SID_CONTROL, WAVEFORM_TRIANGLE);
-    POKE(SID_FILTER_MODE_VOL, prevFilter);
+    // Ring-modulated gong-like short tone
+    // Use RING bit (0x04) with triangle waveform
+    playToneVoice(0, 250, 300, WAVEFORM_TRIANGLE, 0x000, 0x08, 0x06, 0x04);
 }
 
 void soundGameDone()
 {
-    uint8_t i;
-    uint8_t prevFilter;
     if (prefs.disableSound)
         return;
 
-    // Modern end-game fanfare: rising triumphant pulse notes, then a final bell chord.
-    // Victory march: rising pulse tones with wider pulse width and snappy ADSR
-    playToneFull(3355, 67, WAVEFORM_PULSE, 0x0800, 0x84, 0x44);
-    playToneFull(4027, 67, WAVEFORM_PULSE, 0x0A00, 0x84, 0x44);
-    playToneFull(4698, 67, WAVEFORM_PULSE, 0x0C00, 0x84, 0x44);
-    playToneFull(5369, 100, WAVEFORM_PULSE, 0x0E00, 0x74, 0x55);
-
-    // Brief pause
-    {
-        uint8_t t = 2;
-        while (t--)
-            for (ii = 0; ii < 100; ii++)
-                ;
-    }
-
-    // Final triumphant bell: two-voice gong with ring modulation
-    prevFilter = PEEK(SID_FILTER_MODE_VOL);
-    POKE(SID_FILTER_MODE_VOL, (prevFilter & 0xF0) | 0x0F);
-
-    // Voice 1: low bell fundamental
-    POKE(SID_FREQ_LO, 2517 & 0xFF);
-    POKE(SID_FREQ_HI, (2517 >> 8) & 0xFF);
-    POKE(SID_ATTACK_DECAY, 0x64);    // gentle attack
-    POKE(SID_SUSTAIN_RELEASE, 0x36);  // lower sustain for better decay, longer release
-
-    // Voice 2: higher bell partial with ring mod
-    POKE(SID_FREQ_LO + 7, (20133 & 0xFF));
-    POKE(SID_FREQ_HI + 7, ((20133 >> 8) & 0xFF));
-    POKE(SID_ATTACK_DECAY + 7, 0x54);   // quick attack
-    POKE(SID_SUSTAIN_RELEASE + 7, 0x35); // lower sustain, longer ring
-
-    // Gate both voices on with ring modulation on voice2
-    POKE(SID_CONTROL, WAVEFORM_TRIANGLE | GATE_ON);
-    POKE(SID_CONTROL + 7, WAVEFORM_TRIANGLE | GATE_ON | 0x04);
-
-    // Let the bell ring (coarse frames)
-    {
-        uint8_t t = 30;
-        while (t--)
-            for (ii = 0; ii < 200; ii++)
-                ;
-    }
-
-    // Gate off
-    POKE(SID_CONTROL + 7, WAVEFORM_TRIANGLE);
-    POKE(SID_CONTROL, WAVEFORM_TRIANGLE);
-    POKE(SID_FILTER_MODE_VOL, prevFilter);
+    // Long descending tone
+    playToneVoice(0, 600, 220, WAVEFORM_SAWTOOTH, 0x000, 0x06, 0x05, 0x00);
+    playToneVoice(0, 350, 400, WAVEFORM_SAWTOOTH, 0x000, 0x06, 0x07, 0x00);
 }
 
 void soundTick()
@@ -237,56 +232,26 @@ void soundTick()
     if (prefs.disableSound)
         return;
 
-    // Clock-like tick: sharp high click (narrow pulse, very fast attack) + subtle low body
-    // Click: narrow pulse, very short
-    playToneFull(15099, 67, WAVEFORM_PULSE, 0x0200, 0x96, 0x36);
-    // Subtle body to give weight to the tick
-    playToneFull(2013, 83, WAVEFORM_TRIANGLE, 0, 0x86, 0x33);
+    // clock tick: very short click
+    playToneVoice(0, 1200, 30, WAVEFORM_TRIANGLE, 0x000, 0x01, 0x01, 0x00);
 }
 
 void soundPlaceShip()
 {
-    uint8_t i;
-    uint8_t prevFilter;
     if (prefs.disableSound)
         return;
 
-    // Low foghorn: a long low triangle with slow attack and long release,
-    // a detuned pulse underneath for thickness and two short echoes.
-    prevFilter = PEEK(SID_FILTER_MODE_VOL);
-    // emphasize low frequencies for the horn
-    POKE(SID_FILTER_MODE_VOL, (prevFilter & 0xF0) | 0x08);
-
-    // Main horn: deep, slow attack, long sustain/release
-    playToneFull(1007, 250, WAVEFORM_TRIANGLE, 0, 0x63, 0x48);
-
-    // Supporting detuned pulse for body
-    playToneFull(1208, 167, WAVEFORM_PULSE, 0x0A00, 0x84, 0x36);
-
-    // Two trailing short echoes
-    for (i = 0; i < 2; i++)
-    {
-        playToneFull(1007, 67, WAVEFORM_TRIANGLE, 0, 0x84, 0x34);
-    }
-
-    // restore filter/volume
-    POKE(SID_FILTER_MODE_VOL, prevFilter);
+    // plucky attack
+    playToneVoice(0, 500, 90, WAVEFORM_PULSE, 0x0600, 0x03, 0x04, 0x00);
 }
 
 void soundAttack()
 {
-    uint8_t i;
-    uint16_t freq;
-    uint16_t freqs[] = {3355, 3188, 3020, 2852, 2684, 2517, 2349, 2181, 2013, 1845};
     if (prefs.disableSound)
         return;
 
-    // Whoosh / attack: descending sawtooth with quick decay
-    // Frequencies: 3355, 3188, 3020, 2852, 2684, 2517, 2349, 2181, 2013, 1845
-    for (i = 0; i < 10; i++)
-    {
-        playToneFull(freqs[i], 83, WAVEFORM_SAWTOOTH, 0, 0x84, 0x44);
-    }
+    // heavy gunshot: low thump with short decay
+    playToneVoice(0, 80, 70, WAVEFORM_NOISE, 0x000, 0x03, 0x03, 0x00);
 }
 
 void soundInvalid()
@@ -294,70 +259,35 @@ void soundInvalid()
     if (prefs.disableSound)
         return;
 
-    // Short dissonant buzzer using narrow pulsewidth and fast envelope
-    playToneFull(2013, 50, WAVEFORM_PULSE, 0x0100, 0x98, 0x33);
-    playToneFull(1510, 50, WAVEFORM_PULSE, 0x0200, 0x98, 0x33);
-    playToneFull(1174, 50, WAVEFORM_PULSE, 0x0300, 0x98, 0x33);
+    // low buzzy reject tone
+    playToneVoice(0, 220, 120, WAVEFORM_SAWTOOTH, 0x000, 0x01, 0x03, 0x00);
 }
 
 void soundHit()
 {
-    uint8_t i;
-    uint8_t prevFilter;
-    uint16_t freqs[] = {5033, 4362, 3691, 3020, 2349, 1678};
     if (prefs.disableSound)
         return;
 
-    // Explosion / hit: layered noise with falling tone and punchy envelope
-    // Increase resonance/lowpass to get a boom-like noise.
-    // Temporarily tweak filter mode/volume register to emphasize low end.
-    prevFilter = PEEK(SID_FILTER_MODE_VOL);
-    // Set filter mode to lowpass with some volume (keep top nibble as mode, low nibble volume)
-    POKE(SID_FILTER_MODE_VOL, (prevFilter & 0xF0) | 0x0F);
-
-    // Explosion frequencies: 5033, 4362, 3691, 3020, 2349, 1678
-    for (i = 0; i < 6; i++)
-    {
-        // Start bright and fall down
-        playToneFull(freqs[i], 100, WAVEFORM_NOISE, 0, 0x84, 0x55);
-    }
-
-    // restore filter/volume
-    POKE(SID_FILTER_MODE_VOL, prevFilter);
+    // explosion: layered noise bursts
+    playToneVoice(0, 60, 200, WAVEFORM_NOISE, 0x000, 0x05, 0x0F, 0x00);
+    playToneVoice(0, 30, 400, WAVEFORM_NOISE, 0x000, 0x07, 0x0F, 0x00);
 }
 
 void soundMiss()
 {
-    uint8_t i;
-    uint8_t prevFilter;
-    uint16_t ripple_freqs[] = {3355, 3859, 4362, 4865};
     if (prefs.disableSound)
         return;
 
-    // Stone-into-water: a low, short noise "splash" followed by small high-pitched ripples
-    prevFilter = PEEK(SID_FILTER_MODE_VOL);
-    // emphasize low end for splash
-    POKE(SID_FILTER_MODE_VOL, (prevFilter & 0xF0) | 0x0F);
-
-    // Splash: short noise burst with punchy envelope
-    playToneFull(5033, 100, WAVEFORM_NOISE, 0, 0x84, 0x55);
-
-    // Ripples: quick triangle ticks with tiny noise taps in between
-    // Ripple frequencies: 3355, 3859, 4362, 4865
-    for (i = 0; i < 4; i++)
-    {
-        playToneFull(ripple_freqs[i], 50, WAVEFORM_TRIANGLE, 0, 0x64, 0x33);
-        playToneFull(0, 16, WAVEFORM_NOISE, 0, 0xF8, 0x11);
-    }
-
-    // restore filter/volume
-    POKE(SID_FILTER_MODE_VOL, prevFilter);
+    // water splash - lower noise with quick decay
+    playToneVoice(0, 600, 100, WAVEFORM_NOISE, 0x000, 0x03, 0x04, 0x00);
 }
 
 void disableKeySounds()
 {
+    keySoundsEnabled = 0;
 }
 
 void enableKeySounds()
 {
+    keySoundsEnabled = 1;
 }

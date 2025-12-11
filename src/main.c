@@ -54,7 +54,7 @@ void main(void)
     initGraphics();
     initSound();
 
-   // soundCursor();
+    // soundCursor();
     // cgetc();
 
     // soundSelect();
@@ -75,16 +75,13 @@ void main(void)
     // soundPlaceShip();
     // cgetc();
 
-    // soundAttack();
+    // soundAttack(); // jak stuknięcie, nie wybuch, za wysoki
     // cgetc();
 
     // soundInvalid();
     // cgetc();
 
-    // soundHit();
-    // cgetc();
-
-    // soundHit();
+    // soundHit(); // dwa szumy, za wysokie
     // cgetc();
 
     showWelcomeScreen();

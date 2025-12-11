@@ -90,12 +90,35 @@ extern void irqVsyncWait(void);
 #define VIC_MEMORY_SETUP_REGISTER 0xD018
 #define CIA2_VIDEO_BANK_REGISTER 0xDD00
 
+// Sprite registers
+#define SPRITE_BASE 0x0340         // Sprite pointers in screen RAM
+#define SPRITE_X_REG 0xD000        // Sprite 0 X position
+#define SPRITE_Y_REG 0xD001        // Sprite 0 Y position
+#define SPRITE_ENABLE_REG 0xD015   // Sprite enable register
+#define SPRITE_COLOR_REG 0xD027    // Sprite 0 color
+#define SPRITE_DATA_LOC 0xC000     // Sprite data in custom charset area
+
 static uint8_t fieldX = 0, playerCount = 0;
 
 // State for VIC bank switching to use RAM charset at CHARSET_LOC ($1000)
 static uint8_t _saved_d018 = 0;
 static uint8_t _saved_dd00 = 0;
 static uint8_t _saved_d016 = 0;
+
+// Cursor sprite data (8x8 pixels, 21 bytes: 3 bytes per row * 7 rows + padding)
+// Pattern: square with hollow center (cross cursor)
+static const uint8_t cursorSprite[] = {
+    0xFF, 0xFF, 0xFF,  // 11111111 11111111 11111111
+    0x81, 0x81, 0x80,  // 10000001 10000001 10000000
+    0x81, 0x81, 0x80,  // 10000001 10000001 10000000
+    0x81, 0x81, 0x80,  // 10000001 10000001 10000000
+    0x81, 0x81, 0x80,  // 10000001 10000001 10000000
+    0x81, 0x81, 0x80,  // 10000001 10000001 10000000
+    0xFF, 0xFF, 0xFF,  // 11111111 11111111 11111111
+    0x00, 0x00, 0x00   // padding
+};
+
+static bool cursorVisible = false;
 
 static uint16_t quadrant_offset[] = {
     WIDTH * 14 + 8,
@@ -160,10 +183,25 @@ void initGraphics()
     
     // Set all character colors to text color
     memset(COLOR_LOC, COLOR_TEXT, 1000);
+    
+    // Initialize sprite data in charset area
+    memcpy((void *)(SPRITE_DATA_LOC + 0x380), &cursorSprite, sizeof(cursorSprite));
+    
+    // Set sprite pointer (sprite 0 uses location 0x380/64 = pointer value 14)
+    POKE(SPRITE_BASE, 14);
+    
+    // Set sprite 0 color to white (cursor color)
+    POKE(SPRITE_COLOR_REG, COLOR_CURSOR);
+    
+    // Enable sprite 0
+    POKE(SPRITE_ENABLE_REG, PEEK(SPRITE_ENABLE_REG) | 0x01);
 }
 
 void resetGraphics()
 {
+    // Disable sprite 0
+    POKE(SPRITE_ENABLE_REG, PEEK(SPRITE_ENABLE_REG) & 0xFE);
+    
     // Reset to default colors
     POKE(0xD020, 254);
     POKE(0xD021, 246);
@@ -545,7 +583,6 @@ void drawGamefield(uint8_t quadrant, uint8_t *field)
     }
 }
 
-static bool cursorVisible = false;
 void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t blink)
 {
     uint8_t *dest = SCREEN_LOC + quadrant_offset[quadrant] + fieldX + (uint16_t)(attackPos / 10) * WIDTH + (attackPos % 10);
@@ -554,7 +591,8 @@ void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos
     if (cursorVisible)
     {
         cursorVisible = false;
-        //memset(PM_BASE + 1024, 0, 768);
+        // Hide sprite 0
+        POKE(SPRITE_ENABLE_REG, PEEK(SPRITE_ENABLE_REG) & 0xFE);
     }
 
     // Animate attack (only in empty sea cell)
@@ -577,20 +615,31 @@ void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos
         return;
     }
 }
+
 void drawGamefieldCursor(uint8_t quadrant, uint8_t x, uint8_t y, uint8_t *gamefield, uint8_t blink)
 {
-    uint16_t pos = quadrant_offset[quadrant] + y * WIDTH + fieldX + x;
-    // uint16_t lc = lastCursor[quadrant];
-
-    // lastCursor[quadrant] = PM_BASE + 768 + 24 + quadrant * 256 + (pos / WIDTH) * 8;
-
-    // memset(lc, 0, 8);
-    // memcpy(lastCursor[quadrant], &cursor_pmg, 8);
-
-    // POKE(0xd000 - 1 + quadrant, (pos % WIDTH) * 4 + 48); // horiz loc
+    // Calculate screen position from field coordinates
+    uint16_t screenPos = quadrant_offset[quadrant] + y * WIDTH + fieldX + x;
+    uint16_t screenX = screenPos % WIDTH;
+    uint16_t screenY = screenPos / WIDTH;
+    
+    // Convert to pixel coordinates (C64 screen coordinates)
+    // Each character is 8 pixels wide and 8 pixels tall
+    // Screen starts at pixel position (24, 50) on the C64 display
+    uint16_t pixelX = screenX * 8 + 24;
+    uint16_t pixelY = screenY * 8 + 50;
+    
+    // Set sprite position
+    POKE(SPRITE_X_REG, pixelX & 0xFF);
+    POKE(SPRITE_X_REG + 16, (pixelX >> 8) ? (PEEK(SPRITE_X_REG + 16) | 0x01) : (PEEK(SPRITE_X_REG + 16) & 0xFE));
+    POKE(SPRITE_Y_REG, pixelY);
+    
+    // Enable sprite 0
+    POKE(SPRITE_ENABLE_REG, PEEK(SPRITE_ENABLE_REG) | 0x01);
     cursorVisible = true;
 
     (void)gamefield;
+    (void)blink;
 }
 
 void drawEndgameMessage(const char *message)
