@@ -148,9 +148,6 @@ void plot_char(unsigned char x,
         return;
     }
 
-    if (xor)
-        xor=0xFF;
-
     switch(color)
     {
     case 0:
@@ -168,7 +165,10 @@ void plot_char(unsigned char x,
 
     for (i=0;i<sizeof(tile);i++)
     {
-        tile[i] = ascii[c][i] ^ xor & mask;
+        if (xor)
+            tile[i] = ascii[c][i] ^ 0xFF & mask;
+        else
+            tile[i] = ascii[c][i] & mask;
     }
 
     plot_tile(&tile[0], x, y);
@@ -439,7 +439,6 @@ void drawPlayerName(unsigned char player, const char *name, bool active)
     uint8_t i   = 0;
 
     x += fieldX;
-    add=0;
 
     if (player == 0 || player == 3)
     {
@@ -472,7 +471,7 @@ void drawPlayerName(unsigned char player, const char *name, bool active)
         drawIcon(x+9,y+11, 0x60 + add);
         drawIcon(x+10,y+11, 0x60 + add);
         drawIcon(x+11,y+11, 0x5F + add);
-        plotName(x+2,y+11, active ? 2 : 2, name);
+        plotName(x+2,y+11, active ? 2 : 1, name);
 
         // Active indicator
         if (active)
@@ -523,7 +522,7 @@ void drawPlayerName(unsigned char player, const char *name, bool active)
         drawIcon(x+9, y, 0x60 + add);
         drawIcon(x+10, y, 0x60 + add);
         drawIcon(x+11, y, 0x5D + add);
-        plotName(x+2, y, active ? 2 : 2, name); // set back to 1
+        plotName(x+2, y, active ? 2 : 1, name); // set back to 1
 
         // Active indicator
         if (active)
@@ -841,7 +840,23 @@ void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos
  */
 void drawGamefieldCursor(uint8_t quadrant, uint8_t x, uint8_t y, uint8_t *gamefield, uint8_t blink)
 {
-    // Ugh I don't wanna do this yet.
+    unsigned char ex = quadrant_offset[quadrant][0] + fieldX + x;
+    unsigned char ey = quadrant_offset[quadrant][1] + y;
+    unsigned char c = 0;
+
+    switch (backing_store[x][y])
+    {
+    case 0x1b:
+        c = 0x10;
+        break;
+    case 0x39:
+        c = 0x39;
+        break;
+    case 0xe1:
+        c = 0x12;
+        break;
+    }
+    drawIcon(ex, ey, c + blink);
 }
 
 /**
