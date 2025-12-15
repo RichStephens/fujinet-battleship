@@ -7,15 +7,87 @@
 #include <string.h>
 #include "../platform-specific/graphics.h"
 #include "../platform-specific/sound.h"
-#include "../misc.h"
 #include <coco.h>
 
 extern uint8_t charset[];
+#ifdef COCO3
+
+// The 32k of the screen buffer is stored in MMU blocks 52-55
+// Block 52 points to absolute address $68000.
+// The value to put in $FF9D to show this screen is $68000 / 8 = $D000.
+// Since 52 is the 5th MMU block, the local address is $8000.
+// This allows the program to occupy up to the normal 32K limit.
+//
+// Task 1 is swapped in whenever drawing graphics, and swapped out so
+// normal IO/FujiNet operations can occur.
+static const byte task1MMUBlocks[8] =
+    {
+        56,
+        57,
+        58,
+        59, // Default blocks (DO NOT CHANGE)
+        52,
+        53,
+        54,
+        55, // Graphics blocks
+};
+
+byte palette[] =
+    {
+        // RGB
+        0,  // Black
+        7,  // Dark Gray
+        56, // Light Gray
+        63, // White
+        28, // Teal
+        1,  // Dark blue
+        9,  // Sea blue
+        11, // Light blue
+        25, // Foam
+        27, // Light foam
+        4,  // Dark red
+        36, // Red
+        38, // Red Orange
+        52, // Orange
+        54, // Yellow
+        63, // WHITE FOR NOW -  2,  // Dark green
+
+        // Composite
+        0,  // Black
+        16, // Dark Gray
+        32, // Light Gray
+        48, // White
+        30, // Teal
+        13, // Dark blue
+        12, // Sea blue
+        28, // Light blue
+        44, // Foam
+        62, // Light foam
+        7,  // Dark red
+        23, // Red
+        22, // Red Orange
+        21, // Orange
+        36, // Yellow
+        48  // WHITE FOR NOW - 15  // Dark green
+};
+
+byte paletteBackup[16];
+#endif
+
 #define OFFSET_Y 2
 
+#ifdef COCO3
+#define ROP_CPY 0xffff
+#define ROP_ALT 0x8888
+#define ROP_LINE 0xCC
+#else
 #define ROP_CPY 0xff
+#define ROP_ALT 0b10101010
+#define ROP_LINE 0b10101010
+#endif
 
 // Mode 4
+
 #define ROP_BLUE 0b10101010
 #define ROP_YELLOW 0b01010101
 #define BOX_SIDE 0b111100
@@ -60,20 +132,8 @@ uint16_t legendShipOffset[] = {2, 1, 0, 256U * 5, 256U * 6 + 1};
 
 void updateColors()
 {
-    if (prefs.colorMode == COLOR_MODE_COCO3_RGB)
-    {
-        rgb();
-        paletteRGB(1, 3, 3, 3); // White
-        paletteRGB(2, 0, 0, 2); // Blue
-        paletteRGB(3, 2, 0, 0); // Red
-    }
-    else if (prefs.colorMode == COLOR_MODE_COCO3_COMPOSITE)
-    {
-        cmp();
-        palette(1, 63); // White
-        palette(2, 11); // Blue
-        palette(3, 22); // Red
-    }
+
+    memcpy((void *)0xFFB0, &palette + 16 * (prefs.colorMode - 1), 16);
 }
 
 uint8_t cycleNextColor()
@@ -91,12 +151,9 @@ uint8_t cycleNextColor()
 
 void rgbOrComposite()
 {
-    if (!isCoCo3)
-        return; // not a coco3, we can't change palettes anyway.
-
     while (!prefs.colorMode)
     {
-        drawTextAltAt(8, 96, "R-GB or c-composite");
+        drawTextAltAt(10, 96, "r-RGB or c-COMPOSITE");
         switch (cgetc())
         {
         case 'R':
@@ -115,13 +172,54 @@ void rgbOrComposite()
 
 void initGraphics()
 {
+    uint16_t i;
     initCoCoSupport();
 
+#ifdef COCO3
+
+    // TEMP until binary include- Fix endianness of charset
+    for (i = 0; i < 3360; i++)
+    {
+        charset[i] = ((charset[i] >> 4) & 0x0F) | ((charset[i] << 4) & 0xF0);
+    }
+
+    disableInterrupts();
+
+    // Set up Task #1 memory block configuration
+    memcpy(0xFFA8, task1MMUBlocks, sizeof(task1MMUBlocks));
+
+    memcpy(paletteBackup, (void *)0xFFB0, 16); // Backup balette
+    memcpy((void *)0xFFB0, &palette, 16);      // assumes RGB monitor
+
+    asm { sync } // wait for v-sync to change graphics mode
+
+    // Allow border color by switching to CoCo 3 graphics mode verison of PMODE 3:
+    *(byte *)0xFF90 = 0x4C; // reset CoCo 2 compatible bit
+    *(byte *)0xFF98 = 0x80; // graphics mode
+
+    // GIME graphics mode register bits
+    // .XX..... : Scan Lines : 0=192, 1=200, 3=225
+    // ...XXX.. : Bytes/row  : 0=16, 1=20, 2=32, 3=40, 4=64, 5=80, 6=128, 7=160
+    // ......XX : Pixels/byte: 0=8 (2 color), 1=4 (4 color), 2=2 (16 colors)
+    *(byte *)0xFF99 = 0b00111110; // 320x200x16 colors - 40x25 characters
+
+    *(byte *)0xFF9A = 0; // make border black
+
+    // Tell GIME the location of the screen, which is mapped to 52 by MMU.
+    *(uint16_t *)0xFF9D = 0xD000; // 52 << 10;
+
+    // Our first graphics command - this resets the screen
+    resetScreen();
+
+    rgbOrComposite();
+
+#else
     pmode(3, SCREEN);
     pcls(0);
     screen(1, 0);
+#endif
 
-    rgbOrComposite();
+    //
 }
 
 bool saveScreenBuffer()
@@ -204,13 +302,13 @@ void drawTextAlt(uint8_t x, uint8_t y, const char *s)
 void drawTextAltAt(uint8_t x, uint8_t y, const char *s)
 {
     char c;
-    uint8_t rop;
+    ROP_TYPE rop;
 
     while ((c = *s++))
     {
         if (c < 65 || c > 90)
         {
-            rop = ROP_BLUE;
+            rop = ROP_ALT;
         }
         else
         {
@@ -225,7 +323,13 @@ void drawTextAltAt(uint8_t x, uint8_t y, const char *s)
 
 void resetScreen()
 {
+    BEGIN_GFX
+#ifdef COCO3
+    memset16(SCREEN, 0, 16000U);
+#else
     pcls(0);
+#endif
+    END_GFX
 }
 
 void drawLegendShip(uint8_t player, uint8_t index, uint8_t size, uint8_t status)
@@ -247,7 +351,7 @@ void drawLegendShip(uint8_t player, uint8_t index, uint8_t size, uint8_t status)
     }
     else
     {
-        hires_Draw((uint8_t)(dest % 32), (uint8_t)(dest / 32), 1, size * 8, ROP_CPY, &charset[(uint16_t)0x1c << 3]);
+        hires_Draw((uint8_t)(dest % 32), (uint8_t)(dest / 32), 1, size * 8, ROP_CPY, &charset[(uint16_t)0x1c CHAR_SHIFT]);
     }
 }
 
@@ -255,6 +359,8 @@ void drawGamefieldCursor(uint8_t quadrant, uint8_t x, uint8_t y, uint8_t *gamefi
 {
     uint8_t *src, *dest = (uint8_t *)SCREEN + quadrant_offset[quadrant] + fieldX + (uint16_t)y * 256 + x;
     uint8_t j, c = gamefield[y * 10 + x];
+
+    BEGIN_GFX
 
     if (blink)
     {
@@ -264,27 +370,30 @@ void drawGamefieldCursor(uint8_t quadrant, uint8_t x, uint8_t y, uint8_t *gamefi
     {
         c += 0x18;
     }
-    src = &charset[(uint16_t)c << 3];
+    src = &charset[(uint16_t)c CHAR_SHIFT];
 
     for (j = 0; j < 8; ++j)
     {
         *dest = *src++;
         dest += 32;
     }
+    END_GFX
 }
 
-uint8_t *srcBlank = &charset[(uint16_t)0x18 << 3];
-uint8_t *srcHit = &charset[(uint16_t)0x19 << 3];
-uint8_t *srcMiss = &charset[(uint16_t)0x1A << 3];
-uint8_t *srcHit2 = &charset[(uint16_t)0x1B << 3];
-uint8_t *srcHitLegend = &charset[(uint16_t)0x1C << 3];
-uint8_t *srcAttackAnimStart = &charset[(uint16_t)0x63 << 3];
+uint8_t *srcBlank = &charset[(uint16_t)0x18 CHAR_SHIFT];
+uint8_t *srcHit = &charset[(uint16_t)0x19 CHAR_SHIFT];
+uint8_t *srcMiss = &charset[(uint16_t)0x1A CHAR_SHIFT];
+uint8_t *srcHit2 = &charset[(uint16_t)0x1B CHAR_SHIFT];
+uint8_t *srcHitLegend = &charset[(uint16_t)0x1C CHAR_SHIFT];
+uint8_t *srcAttackAnimStart = &charset[(uint16_t)0x63 CHAR_SHIFT];
 
 // Updates the gamefield display at attackPos
 void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t blink)
 {
     uint8_t *src, *dest = (uint8_t *)SCREEN + quadrant_offset[quadrant] + fieldX + (uint16_t)(attackPos / 10) * 256 + (attackPos % 10);
     uint8_t j, c = gamefield[attackPos];
+
+    BEGIN_GFX
 
     // Animate attack (checking for empty sea cells if animating attack for active player)
     if (blink > 9 && (clientState.game.activePlayer > 0 || c == 0))
@@ -314,6 +423,8 @@ void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos
         *dest = *src++;
         dest += 32;
     }
+
+    END_GFX
 }
 
 void drawGamefield(uint8_t quadrant, uint8_t *field)
@@ -321,6 +432,7 @@ void drawGamefield(uint8_t quadrant, uint8_t *field)
     uint8_t *dest = (uint8_t *)SCREEN + quadrant_offset[quadrant] + fieldX;
     uint8_t y, x, j;
     uint8_t *src;
+    BEGIN_GFX
 
     for (y = 0; y < 10; ++y)
     {
@@ -342,6 +454,8 @@ void drawGamefield(uint8_t quadrant, uint8_t *field)
 
         dest += 246;
     }
+
+    END_GFX
 }
 
 void drawShipInternal(uint8_t *dest, uint8_t size, uint8_t delta)
@@ -354,7 +468,7 @@ void drawShipInternal(uint8_t *dest, uint8_t size, uint8_t delta)
     {
         // hires_putc(x, y, ROP_CPY, c);
         // Faster version of above, but uses ~100 bytes
-        src = &charset[(uint16_t)c << 3];
+        src = &charset[(uint16_t)c CHAR_SHIFT];
         for (j = 0; j < 8; ++j)
         {
             *dest = *src++;
@@ -500,10 +614,10 @@ void drawBoard(uint8_t playerCount)
         }
 
         // Outside edge
-        hires_Draw(ox, y, 1, 80, ROP_CPY, &charset[(uint16_t)(left ? 0x23 : 0x22) << 3]);
+        hires_Draw(ox, y, 1, 80, ROP_CPY, &charset[(uint16_t)(left ? 0x23 : 0x22)CHAR_SHIFT]);
 
         // Inner edge (adjacent to ships drawer)
-        hires_Draw(ix, y + 8, 1, 64, ROP_CPY, &charset[(uint16_t)(left ? 0x01 : 0x04) << 3]);
+        hires_Draw(ix, y + 8, 1, 64, ROP_CPY, &charset[(uint16_t)(left ? 0x01 : 0x04)CHAR_SHIFT]);
 
         // Inner edge + ship drawer
         hires_putc(ix, y, ROP_CPY, left ? 0x24 : 0x25);
@@ -525,15 +639,15 @@ void drawBoard(uint8_t playerCount)
             else
                 eh = 3;
 
-            hires_Draw(x - 1, fy, 1, eh, ROP_CPY, &charset[(uint16_t)0x02 << 3] + edgeSkip);
-            hires_Draw(x + 10, fy, 1, eh, ROP_CPY, &charset[(uint16_t)0x03 << 3] + edgeSkip);
-            hires_Draw(x, fy, 10, eh, ROP_CPY, &charset[(uint16_t)0x29 << 3] + edgeSkip);
+            hires_Draw(x - 1, fy, 1, eh, ROP_CPY, &charset[(uint16_t)0x02 CHAR_SHIFT] + edgeSkip);
+            hires_Draw(x + 10, fy, 1, eh, ROP_CPY, &charset[(uint16_t)0x03 CHAR_SHIFT] + edgeSkip);
+            hires_Draw(x, fy, 10, eh, ROP_CPY, &charset[(uint16_t)0x29 CHAR_SHIFT] + edgeSkip);
         }
 
         // Ship drawer edges
-        hires_Draw(drawX, y, 3, 8, ROP_CPY, &charset[(uint16_t)0x11 << 3]);
-        hires_Draw(drawX, y + 72, 3, 8, ROP_CPY, &charset[(uint16_t)0x11 << 3]);
-        hires_Draw(drawEdge, y + 8, 1, 64, ROP_CPY, &charset[(uint16_t)0x10 << 3]);
+        hires_Draw(drawX, y, 3, 8, ROP_CPY, &charset[(uint16_t)0x11 CHAR_SHIFT]);
+        hires_Draw(drawX, y + 72, 3, 8, ROP_CPY, &charset[(uint16_t)0x11 CHAR_SHIFT]);
+        hires_Draw(drawEdge, y + 8, 1, 64, ROP_CPY, &charset[(uint16_t)0x10 CHAR_SHIFT]);
         hires_putc(drawEdge, y, ROP_CPY, drawCorner);
         hires_putc(drawEdge, y + 72, ROP_CPY, drawCorner + 2);
 
@@ -545,7 +659,7 @@ void drawBoard(uint8_t playerCount)
 void drawLine(uint8_t x, uint8_t y, uint8_t w)
 {
     y = y * 8 + OFFSET_Y + 1;
-    hires_Mask(x, y, w, 2, ROP_BLUE);
+    hires_Mask(x, y, w, 2, ROP_LINE);
 }
 
 void drawBox(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
@@ -553,33 +667,29 @@ void drawBox(uint8_t x, uint8_t y, uint8_t w, uint8_t h)
     y = y * 8 + 1 + OFFSET_Y;
 
     // Top Corners
-    hires_putc(x, y, box_color, 0x3b);
-    hires_putc(x + w + 1, y, box_color, 0x3c);
-
-    // Top/bottom lines
-    // hires_Mask(x+1,y+3,w,2, box_color);
-    // hires_Mask(x+1,y+(h+1)*8+2,w,2, box_color);
-
-    // Sides
-    //   for(i=0;i<h;++i) {
-    //     y+=8;
-    //     hires_putc(x,y,box_color, 0x3f);
-    //     hires_putc(x+w+1,y,box_color,0x40);
-    //   }
+    hires_putc(x, y, ROP_CPY, 0x3b);
+    hires_putc(x + w + 1, y, ROP_CPY, 0x3c);
 
     y += 8 * (h - 1);
     // Bottom Corners
-    hires_putc(x, y + 14, box_color, 0x3d);
-    hires_putc(x + w + 1, y + 14, box_color, 0x3e);
+    hires_putc(x, y + 14, ROP_CPY, 0x3d);
+    hires_putc(x + w + 1, y + 14, ROP_CPY, 0x3e);
 }
 
 void resetGraphics()
 {
+    waitvsync();
+#ifdef COCO3
+    memcpy((void *)0xFFB0, paletteBackup, 16); // assumes RGB monitor
+#endif
+
+    pmode(0, 0x400);
+    screen(0, 0);
 }
 
 void waitvsync()
 {
-    asm { sync}
+    asm { sync }
 }
 
 void drawBlank(uint8_t x, uint8_t y)

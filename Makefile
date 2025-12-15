@@ -36,7 +36,8 @@ CFLAGS_EXTRA_COCO = \
 	--no-relocate \
 	--intermediate
 
-LDFLAGS_EXTRA_COCO = --limit=5fff --org=1000
+LDFLAGS_EXTRA_COCO = --limit=5fff --org=1000 # Coco1/2
+#LDFLAGS_EXTRA_COCO = --limit=7800 --org=1000 # Coco3
 
 
 #################################################################
@@ -74,7 +75,7 @@ coco/disk-post::
 # 	Fast speed: -ui_active and -nothrottle starts the emulator in fast mode to quickly load the app. I then throttle it to 100% speed with a hotkey.
 #	cd ~/mame_coco;mame coco -ui_active -nothrottle -window -nomaximize -resolution 1200x1024 -autoboot_delay 2 -nounevenstretch  -autoboot_command "runm\"$(PRODUCT)\n"
 #	cd ~/mame_coco;mame coco3 -ui_active -nothrottle -window -nomaximize -resolution 1300x1024 -autoboot_delay 2 -nounevenstretch  -autoboot_command "runm\"$(PRODUCT)\n"
-	cd ~/mame_coco;mame coco3 -ui_active -nothrottle -window -nomaximize -resolution 800x600 -autoboot_delay 2 -nounevenstretch  -autoboot_command "runm\"$(PRODUCT)\n"
+	cd ~/mame_coco;mame coco3 -ui_active -nothrottle -window -nomaximize -resolution 1300x1024 -autoboot_delay 2 -nounevenstretch  -autoboot_command "runm\"$(PRODUCT)\n"
 # Start normal speed
 #	cd ~/mame_coco;mame coco -ui_active -throttle -window -nomaximize -resolution 1200x1024 -autoboot_delay 2 -nounevenstretch  -autoboot_command "runm\"fbs\n"
 
