@@ -22,6 +22,12 @@ extern unsigned char charset[256][16];
 extern unsigned char ascii[256][16];
 
 /**
+ * @brief used to offset tiles in the upper screen on the game board screen.
+ * This is to make few rows available for the name border at the top.
+ */
+unsigned char tile_offset = 0;
+
+/**
  * @brief pointer to the B800 video segment for CGA
  */
 #define VIDEO_RAM_ADDR ((unsigned char far *)0xB8000000UL)
@@ -97,8 +103,13 @@ void plot_tile(const unsigned char *tile, unsigned char x, unsigned char y)
 {
     unsigned char i=0;
 
-    if (y<25)
+    if (y<25) {
         y <<= 3; // Convert row to line
+
+        // Shift the top tiles down if in gameboard mode
+        if (y<96)
+            y+=tile_offset;
+    }
 
     x <<= 1; // Convert column to video ram offset
 
@@ -196,6 +207,7 @@ void resetScreen(void)
     _fmemset(&video[0x0000], 0, 8000);
     _fmemset(&video[0x2000], 0, 8000);
     waitvsync();
+    tile_offset=0;
 }
 
 /**
@@ -226,6 +238,7 @@ bool isPCjr(void)
  */
 void initGraphics()
 {
+    struct dostime_t tm;
     union REGS r;
 
     // Get old mode
@@ -276,6 +289,10 @@ void initGraphics()
     r.h.bl = 3;
     r.h.bh = 0x0f; // WHITE
     int86(0x10,&r,&r);
+
+    // randomize timer seed
+    _dos_gettime(&tm);
+    srand(60U * tm.minute + tm.second);
 }
 
 /**
@@ -319,7 +336,6 @@ void restoreScreenBuffer()
 void drawText(unsigned char x, unsigned char y, const char *s)
 {
     signed char c=0;
-
     while (c = *s++)
     {
         if (x>39)
@@ -330,13 +346,11 @@ void drawText(unsigned char x, unsigned char y, const char *s)
 
         plot_char(x++, y, 3, 0, c);
     }
-
 }
 
 void drawTextAlt(unsigned char x, unsigned char y, const char *s)
 {
     signed char c=0;
-
     while (c = *s++)
     {
         if (c >= 'A' && c <= 'Z')
@@ -414,7 +428,7 @@ void drawConnectionIcon(bool show)
     else
     {
         drawIcon(0, HEIGHT-1, 0x00);
-        drawIcon(0, HEIGHT-1, 0x00);
+        drawIcon(1, HEIGHT-1, 0x00);
     }
 }
 
@@ -439,30 +453,18 @@ void drawPlayerName(unsigned char player, const char *name, bool active)
 
         // Thin horizontal border
         drawIcon(x, y, 0x08 + add);
-        drawIcon(x+1, y, 0x27 + add);
-        drawIcon(x+2, y, 0x27 + add);
-        drawIcon(x+3, y, 0x27 + add);
-        drawIcon(x+4, y, 0x27 + add);
-        drawIcon(x+5, y, 0x27 + add);
-        drawIcon(x+6, y, 0x27 + add);
-        drawIcon(x+7, y, 0x27 + add);
-        drawIcon(x+8, y, 0x27 + add);
-        drawIcon(x+9, y, 0x27 + add);
-        drawIcon(x+10, y, 0x27 + add);
+        for(i=1;i<11;i++)
+        {
+            drawIcon(x+i, y, 0x27 + add);
+        }
         drawIcon(x+11, y, 0x09 + add);
 
         // Name label
         drawIcon(x, y+11, 0x5E + add);
-        drawIcon(x+1,y+11, 0x60 + add);
-        drawIcon(x+2,y+11, 0x60 + add);
-        drawIcon(x+3,y+11, 0x60 + add);
-        drawIcon(x+4,y+11, 0x60 + add);
-        drawIcon(x+5,y+11, 0x60 + add);
-        drawIcon(x+6,y+11, 0x60 + add);
-        drawIcon(x+7,y+11, 0x60 + add);
-        drawIcon(x+8,y+11, 0x60 + add);
-        drawIcon(x+9,y+11, 0x60 + add);
-        drawIcon(x+10,y+11, 0x60 + add);
+        for(i=1;i<11;i++)
+        {
+            drawIcon(x+i, y+11, 0x60 + add);
+        }
         drawIcon(x+11,y+11, 0x5F + add);
         plotName(x+2,y+11, active ? 2 : 1, name);
 
@@ -472,48 +474,29 @@ void drawPlayerName(unsigned char player, const char *name, bool active)
 
         // Bottom border below name label
         drawIcon(x,y+12, 0x20 + add);
-        drawIcon(x+1,y+12,0x28 + add);
-        drawIcon(x+2,y+12,0x28 + add);
-        drawIcon(x+3,y+12,0x28 + add);
-        drawIcon(x+4,y+12,0x28 + add);
-        drawIcon(x+5,y+12,0x28 + add);
-        drawIcon(x+6,y+12,0x28 + add);
-        drawIcon(x+7,y+12,0x28 + add);
-        drawIcon(x+8,y+12,0x28 + add);
-        drawIcon(x+9,y+12,0x28 + add);
-        drawIcon(x+10,y+12,0x28 + add);
+        for(i=1;i<11;i++)
+        {
+            drawIcon(x+i,y+12,0x28 + add);
+        }
         drawIcon(x+11,y+12,0x21 + add);
     }
     else
     {
         // Top player boards
-
+        
         // top border ABOVE name label
-        drawIcon(x, y-1, 0x05);
-        drawIcon(x+1,y-1,0x26);
-        drawIcon(x+2,y-1,0x26);
-        drawIcon(x+3,y-1,0x26);
-        drawIcon(x+4,y-1,0x26);
-        drawIcon(x+5,y-1,0x26);
-        drawIcon(x+6,y-1,0x26);
-        drawIcon(x+7,y-1,0x26);
-        drawIcon(x+8,y-1,0x26);
-        drawIcon(x+9,y-1,0x26);
-        drawIcon(x+10,y-1,0x26);
-        drawIcon(x+11, y-1, 0x06);
-
+        // All top half of screen tiles are pushed down 2 rows
+        // to make room to draw the border 
+        _fmemset(&video[VIDEO_ODD_OFFSET+x*2+2],0xff,20);
+        video[VIDEO_ODD_OFFSET+x*2+1]=0x0f;
+        video[VIDEO_ODD_OFFSET+x*2+22]=0xf0;
+        
         // Name label
         drawIcon(x, y, 0x5C + add);
-        drawIcon(x+1, y, 0x60 + add);
-        drawIcon(x+2, y, 0x60 + add);
-        drawIcon(x+3, y, 0x60 + add);
-        drawIcon(x+4, y, 0x60 + add);
-        drawIcon(x+5, y, 0x60 + add);
-        drawIcon(x+6, y, 0x60 + add);
-        drawIcon(x+7, y, 0x60 + add);
-        drawIcon(x+8, y, 0x60 + add);
-        drawIcon(x+9, y, 0x60 + add);
-        drawIcon(x+10, y, 0x60 + add);
+        for(i=1;i<11;i++)
+        {
+            drawIcon(x+i, y, 0x60 + add);
+        }
         drawIcon(x+11, y, 0x5D + add);
         plotName(x+2, y, active ? 2 : 1, name); // set back to 1
 
@@ -523,16 +506,10 @@ void drawPlayerName(unsigned char player, const char *name, bool active)
 
         // Thin Horizontal Border
         drawIcon(x, y+11, 0x0A + add);
-        drawIcon(x+1, y+11, 0x29 + add);
-        drawIcon(x+2, y+11, 0x29 + add);
-        drawIcon(x+3, y+11, 0x29 + add);
-        drawIcon(x+4, y+11, 0x29 + add);
-        drawIcon(x+5, y+11, 0x29 + add);
-        drawIcon(x+6, y+11, 0x29 + add);
-        drawIcon(x+7, y+11, 0x29 + add);
-        drawIcon(x+8, y+11, 0x29 + add);
-        drawIcon(x+9, y+11, 0x29 + add);
-        drawIcon(x+10, y+11, 0x29 + add);
+        for(i=1;i<11;i++)
+        {
+            drawIcon(x+i, y+11, 0x29 + add);
+        }
         drawIcon(x+11, y+11, 0x0B + add);
     }
 
@@ -589,6 +566,7 @@ void drawPlayerName(unsigned char player, const char *name, bool active)
         drawIcon(x,y+10,0x24+add);
         drawIcon(x+11,y+10,0x23+add); // Right edge
     }
+    
 }
 
 /**
@@ -598,7 +576,7 @@ void drawPlayerName(unsigned char player, const char *name, bool active)
 void drawBoard(unsigned char currentPlayerCount)
 {
     int i=0;
-
+    tile_offset = 2;
     playerCount = currentPlayerCount;
 
     fieldX = playerCount > 2 ? 0 : 7;
@@ -669,7 +647,7 @@ void drawShipInternal(unsigned char x, unsigned char y, unsigned char size, unsi
  * @param pos Grid position (0-99)
  * @param hide make invisible?
  */
-void drawShip(unsigned char size, unsigned char pos, bool hide)
+void drawShip(unsigned char quadrant, unsigned char size, unsigned char pos, bool hide)
 {
     uint8_t i = 0, delta = 0;
     uint8_t x = 0, y = 0;
@@ -683,8 +661,8 @@ void drawShip(unsigned char size, unsigned char pos, bool hide)
     x = pos % 10;
     y = pos / 10;
 
-    x += fieldX + quadrant_offset[0][0];
-    y += quadrant_offset[0][1];
+    x += fieldX + quadrant_offset[quadrant][0];
+    y += quadrant_offset[quadrant][1];
 
     if (hide)
     {
@@ -734,7 +712,7 @@ void drawLegendShip(uint8_t player, uint8_t index, uint8_t size, uint8_t status)
     else
     {
         y++;
-        x += WIDTH-4;
+        x-=4;
     }
 
     if (status)
@@ -757,7 +735,7 @@ void drawLegendShip(uint8_t player, uint8_t index, uint8_t size, uint8_t status)
 void drawGamefield(uint8_t quadrant, uint8_t *field)
 {
     uint8_t ix=0, iy=0;
-    uint8_t x = quadrant_offset[quadrant][0];
+    uint8_t x = quadrant_offset[quadrant][0] + fieldX;
     uint8_t y = quadrant_offset[quadrant][1];
 
     for (iy=0;iy<10;iy++)
@@ -781,14 +759,8 @@ void xorCursor(void)
     // Need to figure out wtf to do here
 }
 
-/**
- * @brief Update game field
- * @param quadrant player # (0-3)
- * @param gamefield pointer to gamefield to update
- * @param attackPos Position to attach (0-99)
- * @param blink Blink state
- */
-void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t blink)
+
+void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t anim)
 {
     uint8_t x=quadrant_offset[quadrant][0] + fieldX + (attackPos % 10);
     uint8_t y=quadrant_offset[quadrant][1] + (attackPos / 10);
@@ -800,16 +772,16 @@ void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos
         xorCursor();
     }
 
-    // Animate attack (only in empty sea cell)
-    if (blink > 9 && (gamefield[attackPos] == 0))
+    // Animate attack
+    if (anim > 9)
     {
-        drawIcon(x, y, 217+blink);
+        drawIcon(x, y, 217+anim);
         return;
     }
 
     if (c == FIELD_ATTACK)
     {
-        drawIcon(x, y, blink ? 0x1B : 0x39);
+        drawIcon(x, y, anim ? 0x1B : 0x39);
     }
     else if (c == FIELD_MISS)
     {
@@ -856,9 +828,9 @@ void drawEndgameMessage(const char *message)
     x = WIDTH / 2 - i / 2;
 
     for (ix=0;ix<WIDTH;ix++)
-        drawIcon(ix, WIDTH-2, 0xE2);
-    for (ix=0;ix<WIDTH;ix++)
-        drawIcon(ix, WIDTH-1, 0x40);
+        drawIcon(ix, HEIGHT-2, 0xE2);
+
+    drawSpace(0, HEIGHT-1,WIDTH);  
     drawText(x,HEIGHT-1,message);
 }
 

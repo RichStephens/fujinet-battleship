@@ -24,9 +24,10 @@
 
 // Store default public server endpoint in case lobby did not set app key
 char serverEndpoint[50] = "https://battleship.carr-designs.com/";
+//char serverEndpoint[50] = "http://127.0.0.1:8080/";
 
 // For local dev testing, instead of changing the endpoint above,
-// set 1st byte in the e41c0500 appkey to 0xff, which will cause the below endpoing to be used
+// set 1st byte in the e41c0500 appkey to 0xff, which will cause the below endpoint to be used
 char localServer[] = "http://127.0.0.1:8080/";
 
 char query[50] = ""; //"?table=dev7";//&player=ERICAPL2";
@@ -45,13 +46,44 @@ uint8_t shipSize[5] = {5, 4, 3, 3, 2}; // Standard ship sizes
 void main(void)
 {
     uint8_t failedApiCalls = 0;
+        char ch;
     // Testing
     // toneFinder();
     // printf("Press keys\n");while(1) {while (!kbhit());failedApiCalls = cgetc();printf("%d 0x%x\n", failedApiCalls, failedApiCalls);} // Read Key
-
-    loadPrefs();
+    
+    loadPrefs();    
     initGraphics();
     initSound();
+
+    // soundCursor();
+    // cgetc();
+
+    // soundSelect();
+    // cgetc();
+
+    // soundJoinGame();
+    // cgetc();
+
+    // soundMyTurn();
+    // cgetc();
+
+    // soundGameDone();
+    // cgetc();
+
+    // soundTick();
+    // cgetc();
+
+    // soundPlaceShip();
+    // cgetc();
+
+    // soundAttack(); // jak stuknięcie, nie wybuch, za wysoki
+    // cgetc();
+
+    // soundInvalid();
+    // cgetc();
+
+    // soundHit(); // dwa szumy, za wysokie
+    // cgetc();
 
     showWelcomeScreen();
     showTableSelectionScreen();

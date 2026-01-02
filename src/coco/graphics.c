@@ -213,6 +213,8 @@ uint8_t legendShipOffset[5][2] =
      . . . . .
 */
 
+
+#ifdef COCO3
 void updateColors()
 {
     memcpy((void *)0xFFB0, &palette + 16 * (prefs.colorMode - 1), 16);
@@ -251,7 +253,15 @@ void rgbOrComposite()
 
     updateColors();
 }
+
 uint16_t oldGime;
+#else
+uint8_t cycleNextColor() {
+    // Not implemented on CoCo 2
+    return 0;
+}
+#endif
+
 void initGraphics()
 {
     uint16_t i;
@@ -614,7 +624,7 @@ void drawLegendShip(uint8_t player, uint8_t index, uint8_t size, uint8_t status)
 
     if (status)
     {
-        drawShipInternal(x, y, size, 1);
+        drawShipInternal(x, y + 1, size, 1);
     }
     else
     {
@@ -645,23 +655,23 @@ uint8_t *srcHit2 = &charset[(uint16_t)0x1B CHAR_SHIFT];
 uint8_t *srcHitLegend = &charset[(uint16_t)0x1C CHAR_SHIFT];
 uint8_t *srcAttackAnimStart = &charset[(uint16_t)0x63 CHAR_SHIFT];
 
-// Updates the gamefield display at attackPos
-void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t blink)
+
+void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos, uint8_t anim)
 {
     uint8_t j, c = gamefield[attackPos];
     uint8_t *src;
 
-    // Animate attack (checking for empty sea cells if animating attack for active player)
-    if (blink > 9 && (state.prevActivePlayer > 0 || c == 0))
+    // Animate attack
+    if (anim > 9)
     {
-        src = srcAttackAnimStart + (blink - 10) * CHAR_SIZE;
+        src = srcAttackAnimStart + (anim - 10) * CHAR_SIZE;
     }
     else
     {
 
         if (c == FIELD_ATTACK)
         {
-            src = blink ? srcHit2 : srcHit;
+            src = anim ? srcHit2 : srcHit;
         }
         else if (c == FIELD_MISS)
         {
@@ -720,7 +730,7 @@ void drawShipInternal(uint8_t x, uint8_t y, uint8_t size, uint8_t delta)
     }
 }
 
-void drawShip(uint8_t size, uint8_t pos, bool hide)
+void drawShip(uint8_t quadrant, uint8_t size, uint8_t pos, bool hide)
 {
     uint8_t x, y, i, j, delta = 0;
     uint8_t *src;
@@ -731,8 +741,8 @@ void drawShip(uint8_t size, uint8_t pos, bool hide)
         pos -= 100;
     }
 
-    x = (pos % 10) + fieldX + quadrant_offset_xy[0][0];
-    y = ((pos / 10) + quadrant_offset_xy[0][1] / 8) * 8 + OFFSET_Y;
+    x = (pos % 10) + fieldX + quadrant_offset_xy[quadrant][0];
+    y = ((pos / 10) + quadrant_offset_xy[quadrant][1] / 8) * 8 + OFFSET_Y;
 
     if (hide)
     {
