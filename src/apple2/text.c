@@ -1,5 +1,3 @@
-#ifdef __APPLE2__
-
 /**
  * @brief Text routines
  * @author Oliver Schmidt
@@ -42,5 +40,3 @@ void hires_putcc(unsigned char x, unsigned char y,unsigned rop, unsigned cc)
   hires_putc(x,y,rop,cc>>8);
   hires_putc(++x,y,rop,cc);
 }
-
-#endif /* __APPLE2__ */

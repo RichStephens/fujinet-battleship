@@ -1,5 +1,3 @@
-//#ifdef __APPLE2__
-
 /*
   Graphics functionality
 */
@@ -803,4 +801,3 @@ void waitvsync() {
   for ( i=0;i<630;i++);
 }
   */
-//#endif /* __APPLE2__ */

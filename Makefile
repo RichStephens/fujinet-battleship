@@ -85,7 +85,7 @@ coco3:
 
 
 # Apple II specific flags (cc65)
-CFLAGS_EXTRA_APPLE2 += -Os -D__APPLE2__
+CFLAGS_EXTRA_APPLE2 += -Os
 LDFLAGS_EXTRA_APPLE2 += --start-addr 0x4000 --ld-args -D,__HIMEM__=0xBF00
 
 

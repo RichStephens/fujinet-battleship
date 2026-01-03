@@ -10,8 +10,8 @@
 #define HEIGHT 24
 
 // Other platform specific constnats
-
 #define GAMEOVER_PROMPT_Y HEIGHT - 2
+#define LOGO_Y 2
 
 #undef ESCAPE
 #define ESCAPE "BREAK"

@@ -7,10 +7,6 @@
 
 #include "misc.h"
 
-#ifdef __APPLE2__
-#include <peekpoke.h>
-#endif
-
 InputStruct input;
 uint8_t _lastJoy, _joy, _joySameCount = 10;
 bool _buttonReleased = true;
