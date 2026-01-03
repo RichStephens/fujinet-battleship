@@ -78,6 +78,11 @@ static const uint8_t greenLineFont[2] = {
     0x2a,  // EVEN: green pattern
     0x55   // ODD: green pattern
 };
+// Green line font data for active player name underline (1 byte per pattern)
+static const uint8_t orangeLineFont[2] = {
+  0xaa,  // EVEN: orange pattern
+  0xd5   // ODD: orange pattern
+};
 
 // Helper function to draw drawer border
 // type: 0=top black/bottom blue, 1=top blue/bottom black, 2=right black/left blue, 3=left blue/right black
@@ -177,7 +182,7 @@ void drawBox(unsigned char x, unsigned char y, unsigned char w, unsigned char h)
 }
 
 void resetGraphics() {
- 
+  ;
 }
 
 void initGraphics() {
@@ -400,11 +405,12 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
 
   lineY = y + 8;
 
+  drawTextAt(x, y, name);  
   if (active)
   {
-      // Draw marker and text
-      hires_putc(x - 1, y, ROP_CPY_NOFLIP, ICON_ACTIVE_PLAYER);
-      drawTextAt(x, y, name);
+      // Draw marker
+      hires_putc(x - 1, y, ROP_CPY, ICON_ACTIVE_PLAYER);
+      hires_putc(x + 8, y, ROP_CPY, ICON_ACTIVE_PLAYER_RIGHT);
       
       // Draw green horizontal line at bottom of player name row (10 columns, 1 pixel thick)
       // Use hires_Draw with ROP_CPY_NOFLIP to get green/violet palette
@@ -412,15 +418,14 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
       for (gx = 0; gx < 10; gx++) {
           uint8_t actualX = x - 1 + gx;  // Start from x - 1 to cover 10 columns including icon
           uint8_t fontIndex = (actualX % 2);  // 0 for EVEN, 1 for ODD
-          hires_Draw(actualX, lineY, 1, 1, ROP_CPY_NOFLIP, (char*)&greenLineFont[fontIndex]);
+          hires_Draw(actualX, lineY, 1, 1, ROP_CPY_NOFLIP, (char*)&orangeLineFont[fontIndex]);
       }
   }
   else
   {
-      hires_putc(x - 1, y, ROP_CPY, 0x20);
-      drawTextAt(x, y, name);  // Draw player name
-      
-      // Erase green line by drawing black (10 columns, 1 pixel thick)
+      hires_putc(x - 1, y, ROP_CPY, ICON_BLANK);
+      hires_putc(x + 8, y, ROP_CPY, ICON_BLANK);
+      // Erase orange line by drawing black (10 columns, 1 pixel thick)
       for (gx = 0; gx < 10; gx++) {
           uint8_t actualX = x - 1 + gx;
           hires_Mask(actualX, lineY, 1, 1, ROP_BLACK);
@@ -430,9 +435,9 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
 
 uint8_t *srcBlank = &charset[(uint16_t)0x18 << 3];
 uint8_t *srcHit = &charset[(uint16_t)0x19 << 3];
-uint8_t *srcMiss = &charset[(uint16_t)0x1A << 3];
-uint8_t *srcHit2 = &charset[(uint16_t)0x1B << 3];
-uint8_t *srcHitLegend = &charset[(uint16_t)0x1C << 3];
+uint8_t *srcMiss = &charset[(uint16_t)0x1a << 3];
+uint8_t *srcHit2 = &charset[(uint16_t)0x1b << 3];
+uint8_t *srcHitLegend = &charset[(uint16_t)0x1c << 3];
 
 void drawGamefield(uint8_t quadrant, uint8_t *field)
 {
@@ -511,11 +516,6 @@ void drawGamefieldUpdate(uint8_t quadrant, uint8_t *gamefield, uint8_t attackPos
         //charCode = 0x1A;  // srcMiss
         charCode = ((baseX + x) % 2) ? MISS_NORMAL_ODD : MISS_NORMAL_EVEN;
     }
-    //   else if (c == 0)
-    //   {
-    //     charCode = ((baseX + x) % 2) ? EMPTY_NORMAL_ODD : EMPTY_NORMAL_EVEN;
-    //       //return;  debug: need to write back even for empty cells
-    //   }
     else {
         return;
     }
@@ -596,7 +596,7 @@ void drawConnectionIcon(bool show)
 
 void drawBlank(uint8_t x, uint8_t y)
 {
-  hires_putc(x, y * 8 - 4, ROP_CPY, 0x20);
+  hires_putc(x, y * 8 - 4, ROP_CPY, ICON_BLANK);
 }
 
 void drawSpace(uint8_t x, uint8_t y, uint8_t w) {
