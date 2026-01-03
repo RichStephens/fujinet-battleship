@@ -1,6 +1,8 @@
 #ifndef KEYMAP_H
 #define KEYMAP_H
 
+#include <joystick.h>
+
 // Screen dimensions for platform
 // from coco ver.
 
@@ -8,8 +10,8 @@
 #define HEIGHT 24
 
 // Other platform specific constnats
-
 #define GAMEOVER_PROMPT_Y HEIGHT - 2
+#define LOGO_Y 2
 
 #undef ESCAPE
 #define ESCAPE "BREAK"
@@ -94,5 +96,6 @@
 #define KEY_BACKSPACE 0x7F
 
 #define CHAR_CURSOR 0x9F
+
 
 #endif /* KEYMAP_H */

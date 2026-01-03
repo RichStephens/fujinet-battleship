@@ -1,17 +1,14 @@
-#include <stdlib.h>
-#include <string.h>
-#include "platform-specific/graphics.h"
-#include "platform-specific/sound.h"
-#include "platform-specific/util.h"
-#include "gamelogic.h"
+/*******************************************************************
+ * 
+ * Do NOT include standard library headers (e.g. conio, std*). 
+ * Instead, add to standard_lib.h, which gets included in misc.h
+ * 
+ ******************************************************************/
+
 #include "misc.h"
+#include "gamelogic.h"
 #include "stateclient.h"
 #include "screens.h"
-// #include <peekpoke.h>
-
-#ifdef __WATCOMC__
-#define cgetc getch
-#endif /* __WATCOMC__ */
 
 #ifndef TIMER_WIDTH
 #define TIMER_WIDTH 1
@@ -592,7 +589,15 @@ void waitOnPlayerMove()
         waitvsync();
         if (moved || i != lastFrame)
         {
-            lastFrame = i;
+            
+
+            // Always show the cursor (do not blink) when moving it around. 
+            // Otherwise, it appears to skip around
+            if (moved)
+                lastFrame = 1; // Show cursor frame 1
+            else
+                lastFrame = i; // Show 0,1,2 depending on frame
+
             // Draw cursor
             for (i = 1; i < clientState.game.playerCount; i++)
             {

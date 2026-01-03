@@ -1,23 +1,23 @@
-#include <stdlib.h>
+/*******************************************************************
+ * 
+ * Do NOT include standard library headers (e.g. conio, std*). 
+ * Instead, add to standard_lib.h, which gets included in misc.h
+ * 
+ ******************************************************************/
+
+#include "misc.h"
 #include "stateclient.h"
 #include "screens.h"
-#include "misc.h"
 #include "gamelogic.h"
-
-#include "platform-specific/graphics.h"
-#include "platform-specific/input.h"
-#include "platform-specific/util.h"
-#include "platform-specific/sound.h"
-#include <string.h>
 
 #define PLAYER_NAME_MAX 8
 #define PLAYER_BOX_TOP 13
 #define REMOVE_PLAYER_KEY '/'
 #define INGAME_MENU_X WIDTH / 2 - 8
 
-#ifdef __WATCOMC__
-#include <conio.h>
-#define cgetc getch
+// Logo vertical position - set in [platform]/vars.h to override if needed
+#ifndef LOGO_Y
+#define LOGO_Y 1
 #endif
 
 bool inBorderedScreen = false, prevBorderedScreen = false, savedScreen = false;
@@ -114,11 +114,8 @@ void welcomeActionVerifyServerDetails()
 void drawLogo()
 {
     drawBox(WIDTH / 2 - 8, 0, 15, 1);
-#ifdef __APPLE2__
-    drawText(WIDTH / 2 - 7, 2, "FUJI battleship");
-#else
-    drawTextAlt(WIDTH / 2 - 7, 1, "FUJI battleship");
-#endif
+    drawTextAlt(WIDTH / 2 - 7, LOGO_Y, "FUJI battleship");
+
 }
 
 void showPlayerNameScreen()

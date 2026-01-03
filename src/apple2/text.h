@@ -1,5 +1,3 @@
-#ifdef __APPLE2__
-
 /**
  * @brief Text routines
  * @author Oliver Schmidt
@@ -17,4 +15,3 @@ void hires_mask(char xpos,    char ypos,
                 unsigned rop);
 
 #endif /* TEXT_H */
-#endif /* __APPLE2__ */
