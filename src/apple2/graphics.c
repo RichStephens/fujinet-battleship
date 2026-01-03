@@ -16,13 +16,10 @@
 #define BOTTOM 175
 #define RED_VAL_1 ROP_OR(0b11010100)
 #define RED_VAL_2 ROP_OR(0b10101010)
-// Added at the top of apple2/graphics.c
-#define ROP_BLUE   ROP_OR(0b11010101)  
-#define ROP_YELLOW ROP_OR(0b10101010)  // Phase-inverted hatching pattern
 // Background pattern constants for checkerboard pattern
 #define EVEN_BLUE  0b11010101  // Pattern for even x coordinates
 #define ODD_BLUE   0b10101010  // Pattern for odd x coordinates
-#define ROP_WRITE_RIGHT_HALF ROP_CONST(0b11110000) 
+#define ROP_WRITE_RIGHT_HALF ROP_CONST(0b11100000) 
 #define ROP_WRITE_LEFT_HALF ROP_CONST(0b1000011) 
 #define SCREEN_WIDTH 40
 
@@ -73,12 +70,12 @@ static const uint8_t drawerBorderFont[8][8] = {
 #define V_LINE_LEFT   0x07
 #define V_LINE_RIGHT  0xf0
 
-// Green line font data for active player name underline (1 byte per pattern)
+// Green line font data for player name underline (1 byte per pattern)
 static const uint8_t greenLineFont[2] = {
     0x2a,  // EVEN: green pattern
     0x55   // ODD: green pattern
 };
-// Green line font data for active player name underline (1 byte per pattern)
+// Orange line font data for active player name underline (1 byte per pattern)
 static const uint8_t orangeLineFont[2] = {
   0xaa,  // EVEN: orange pattern
   0xd5   // ODD: orange pattern
@@ -118,8 +115,6 @@ unsigned char cycleNextColor() {
     colorMode=0;
   return colorMode;
 }
-
-
 
 void drawTextAt(unsigned char x, unsigned char y, const char*s) {
   static unsigned char c;
@@ -385,6 +380,80 @@ void drawShipInternal(unsigned char x, unsigned char y, uint8_t size, uint8_t de
     }
 }
 
+// Helper function to draw horizontal player borders (drawer and game field)
+// active: true for orange, false for green
+// Note: Only draws horizontal borders. Vertical borders remain white (drawn by drawBoard).
+static void drawPlayerBorders(uint8_t player, bool active)
+{
+    uint8_t x, y, drawX, gx;
+    uint16_t pos;
+    uint8_t playerCount = currentPlayerCount;
+    
+    // Color patterns for borders
+    const uint8_t *horizPattern = active ? orangeLineFont : greenLineFont;
+    
+    pos = fieldX + quadrant_offset[player];
+    x = (uint8_t)(pos % WIDTH);
+    y = (uint8_t)(pos / WIDTH);
+    
+    // Determine drawer position (same as drawBoard)
+    if (player > 1 || playerCount == 2 && player > 0) {
+        drawX = x + 11;  // Right drawer: ix + 1, where ix = x + 10
+    } else {
+        drawX = x - 4;   // Left drawer: ix - 3, where ix = x - 1
+    }
+    
+    // Draw drawer horizontal borders (outside white lines)
+    if (player > 1 || playerCount == 2 && player > 0) {
+        // Right drawer
+        // Top horizontal line (1 pixel thick, above drawer top border, 4 columns wide)
+        for (gx = 0; gx < 4; gx++) {
+            uint8_t actualX = drawX + gx;
+            uint8_t fontIndex = (actualX % 2);
+            hires_Draw(actualX, y + 3, 1, 1, ROP_CPY_NOFLIP, (char*)&horizPattern[fontIndex]);
+        }
+        
+        // Bottom horizontal line (1 pixel thick, below drawer bottom border, 4 columns wide)
+        for (gx = 0; gx < 4; gx++) {
+            uint8_t actualX = drawX + gx;
+            uint8_t fontIndex = (actualX % 2);
+            hires_Draw(actualX, y + 8 + 68, 1, 1, ROP_CPY_NOFLIP, (char*)&horizPattern[fontIndex]);
+        }
+    } else {
+        // Left drawer
+        // Top horizontal line (1 pixel thick, above drawer top border, 4 columns wide)
+        for (gx = 0; gx < 4; gx++) {
+            uint8_t actualX = drawX - 1 + gx;
+            uint8_t fontIndex = (actualX % 2);
+            hires_Draw(actualX, y + 3, 1, 1, ROP_CPY_NOFLIP, (char*)&horizPattern[fontIndex]);
+        }
+        
+        // Bottom horizontal line (1 pixel thick, below drawer bottom border, 4 columns wide)
+        for (gx = 0; gx < 4; gx++) {
+            uint8_t actualX = drawX - 1 + gx;
+            uint8_t fontIndex = (actualX % 2);
+            hires_Draw(actualX, y + 8 + 68, 1, 1, ROP_CPY_NOFLIP, (char*)&horizPattern[fontIndex]);
+        }
+    }
+    
+    // Draw game field horizontal border (opposite side of player name)
+    if (player == 1 || player == 2) {
+        // Top players: draw at bottom of game field
+        for (gx = 0; gx < 10; gx++) {
+            uint8_t actualX = x + gx;
+            uint8_t fontIndex = (actualX % 2);
+            hires_Draw(actualX, y + 80, 1, 1, ROP_CPY_NOFLIP, (char*)&horizPattern[fontIndex]);
+        }
+    } else {
+        // Bottom players: draw at top of game field
+        for (gx = 0; gx < 10; gx++) {
+            uint8_t actualX = x + gx;
+            uint8_t fontIndex = (actualX % 2);
+            hires_Draw(actualX, y - 1, 1, 1, ROP_CPY_NOFLIP, (char*)&horizPattern[fontIndex]);
+        }
+    }
+}
+
 void drawPlayerName(uint8_t player, const char *name, bool active)
 {
   uint16_t pos; 
@@ -395,14 +464,13 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
   uint8_t lineY;
 
   
-    pos = fieldX + quadrant_offset[player];
-    x = (uint8_t)(pos % 40 + 1);  // Changed from 32 to 40
-    y = (uint8_t)(pos / 40 - 9);
+  pos = fieldX + quadrant_offset[player];
+  x = (uint8_t)(pos % 40 + 1);
+  y = (uint8_t)(pos / 40 - 9);
   if (player == 0 || player == 3)
   {
       y += 89;
   }
-
   lineY = y + 8;
 
   drawTextAt(x, y, name);  
@@ -412,9 +480,7 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
       hires_putc(x - 1, y, ROP_CPY, ICON_ACTIVE_PLAYER);
       hires_putc(x + 8, y, ROP_CPY, ICON_ACTIVE_PLAYER_RIGHT);
       
-      // Draw green horizontal line at bottom of player name row (10 columns, 1 pixel thick)
-      // Use hires_Draw with ROP_CPY_NOFLIP to get green/violet palette
-      // Draw only 1 line (ysize=1) at lineY position
+      // Draw orange horizontal line at bottom of player name row (10 columns, 1 pixel thick)
       for (gx = 0; gx < 10; gx++) {
           uint8_t actualX = x - 1 + gx;  // Start from x - 1 to cover 10 columns including icon
           uint8_t fontIndex = (actualX % 2);  // 0 for EVEN, 1 for ODD
@@ -425,12 +491,17 @@ void drawPlayerName(uint8_t player, const char *name, bool active)
   {
       hires_putc(x - 1, y, ROP_CPY, ICON_BLANK);
       hires_putc(x + 8, y, ROP_CPY, ICON_BLANK);
-      // Erase orange line by drawing black (10 columns, 1 pixel thick)
+      // Erase orange line by drawing green (10 columns, 1 pixel thick)
       for (gx = 0; gx < 10; gx++) {
           uint8_t actualX = x - 1 + gx;
-          hires_Mask(actualX, lineY, 1, 1, ROP_BLACK);
+          uint8_t fontIndex = (actualX % 2);  // 0 for EVEN, 1 for ODD
+          hires_Draw(actualX, lineY, 1, 1, ROP_CPY_NOFLIP, (char*)&greenLineFont[fontIndex]);
+          //hires_Mask(actualX, lineY, 1, 1, ROP_BLACK);
       }
   }
+  // Draw player borders (overwrite white borders from drawBoard)
+  // active=true: orange, active=false: green
+  drawPlayerBorders(player, active);
 }
 
 uint8_t *srcBlank = &charset[(uint16_t)0x18 << 3];
@@ -654,7 +725,7 @@ void drawBoard(uint8_t playerCount)
         }
         // Blue gamefield
         for (gx=0; gx < 10; gx++) {
-          hires_Mask(x+gx, y, 1, 80, ((x+gx) % 2 ) ? ROP_YELLOW : ROP_BLUE);
+          hires_Mask(x+gx, y, 1, 80, ROP_OR(((x+gx) % 2) ? ODD_BLUE : EVEN_BLUE));
         }
         edgeSkip = 0;
         if (playerCount == 1)
@@ -672,7 +743,7 @@ void drawBoard(uint8_t playerCount)
         }
         // Fill in the drawer
         for (gx=0; gx < 3; gx++) {
-          hires_Mask(drawX+gx, y+8, 1, 64, ((drawX+gx) % 2 ) ? ROP_YELLOW : ROP_BLUE);
+          hires_Mask(drawX+gx, y+8, 1, 64, ROP_OR(((drawX+gx) % 2) ? ODD_BLUE : EVEN_BLUE));
         }
         // Draw drawer borders
         // Top border (3 characters wide, starting at y, above drawer)
@@ -781,7 +852,7 @@ bool saveScreenBuffer()
 
 void restoreScreenBuffer()
 {
-    // Not implemented in prototype
+    ;
 }
 void drawEndgameMessage(const char *message)
 {
