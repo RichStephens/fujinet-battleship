@@ -1,12 +1,17 @@
-/*
-  Apple II Joystick - Prototype version
-*/
+#include <apple2.h>
+#include <joystick.h>
 
-#include <stdint.h>
+static unsigned char installedDriver = 0, canReadJoystick=0;
 
-uint8_t readJoystick(void)
-{
-    // Not implemented in prototype - return 0 (no input)
-    return 0;
+unsigned char readJoystick() {
+
+  if (!installedDriver) {
+    installedDriver=1;
+
+    if (joy_install(joy_static_stddrv) == JOY_ERR_OK) {
+      canReadJoystick = joy_read(JOY_1) == 0;
+    }
+  }
+  
+  return canReadJoystick ? joy_read(JOY_1) : 0;
 }
-
