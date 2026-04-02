@@ -34,7 +34,10 @@ endef
 
 PRODUCT = fbs
 PRODUCT_UPPER = FBS
-PLATFORMS = coco msdos atari apple2 c64
+PLATFORMS = coco atari apple2 c64
+
+# Use "make-exp msdos" to build msdos.
+# That version uses fujinet-lib-experimental.
 
 # SRC_DIRS may use the literal %PLATFORM% token.
 # It expands to the chosen PLATFORM plus any of its combos.
