@@ -1,9 +1,9 @@
 #################################################################
 # THIS is the ONLY Makefile that should be modified.            #
 #                                                               #
-# Do NOT customize files in /makefiles                          #
+# Do NOT customize files in /mekkogx                           #
 #                                                               #
-# Read makefiles/README.md for more information                 #
+# Read mekkogx/README.md for more information                   #
 #################################################################
 
 # TO BUILD: 		make <platform>
@@ -124,7 +124,7 @@ endif
 
 #################################################################
 # Include MekkoGX makefile system (Make Gen-X)
-include makefiles/toplevel-rules.mk
+include mekkogx/toplevel-rules.mk
 #################################################################
 
 
@@ -167,6 +167,7 @@ atari/disk-post::
 #	cp $(EXECUTABLE) ~/Documents/fujinetpc-atari/SD
 
 msdos/disk-post::
+	mcopy -t -i $(DISK) src/msdos/AUTOEXEC.BAT "::AUTOEXEC.BAT"
 #	cp $(DISK) ~/tnfs/
 #	Copy to fujinet-pc SD drive.
 	cp $(DISK) ~/Documents/fujinetpc-rs232/SD
